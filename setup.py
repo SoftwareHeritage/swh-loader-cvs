@@ -7,7 +7,7 @@
 from io import open
 from os import path
 
-from setuptools import find_packages, setup
+from setuptools import find_packages, setup, Extension
 
 here = path.abspath(path.dirname(__file__))
 
@@ -69,4 +69,9 @@ setup(
         "Source": "https://forge.softwareheritage.org/source/swh-loader-cvs",
         "Documentation": "https://docs.softwareheritage.org/devel/swh-loader-cvs",
     },
+    ext_modules = [
+        Extension("swh.loader.cvs.rcsparse",
+        sources=["swh/loader/cvs/rcsparse/py-rcsparse.c",
+         "swh/loader/cvs/rcsparse/rcsparse.c"])
+    ]
 )
