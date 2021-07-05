@@ -210,7 +210,11 @@ class CvsLoader(BaseLoader):
                 else:
                     # create, or update, this file in the work tree
                     contents = self.rcs.expand_keyword(f.path, f.rev)
-                    outfile = open(wtpath, mode='wb')
+                    try:
+                        outfile = open(wtpath, mode='wb')
+                    except FileNotFoundError:
+                        os.makedirs(os.path.dirname(wtpath))
+                        outfile = open(wtpath, mode='wb')
                     outfile.write(contents)
                     outfile.close()
 
