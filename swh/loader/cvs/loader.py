@@ -357,10 +357,6 @@ class CvsLoader(BaseLoader):
         self.log.debug("SWH snapshot ID: %s" % hashutil.hash_to_hex(self.snapshot.id))
         self.flush()
         self.loaded_snapshot_id = self.snapshot.id
-        del self._skipped_contents
-        del self._contents
-        del self._directories
-        del self._revisions
         self._skipped_contents = []
         self._contents = []
         self._directories = []
