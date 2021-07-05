@@ -316,9 +316,11 @@ class CvsLoader(BaseLoader):
             revision = self.build_swh_revision(k, swh_dir.hash, [])
             self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
             self._last_revision = revision
-            # We have an eventful load if this revision is not already present in the archive
-            if not self.storage.revision_get([revision.id])[0]:
-                self._load_status = "eventful"
+            if self._load_status = "uneventful":
+                # We have an eventful load if this revision is not already present in the archive
+                if not self.storage.revision_get([revision.id])[0]:
+                    self._load_status = "eventful"
+            if self._load_status == "eventful":
                 self._contents.extend(content)
                 self._skipped_contents.extend(skipped_content)
                 self._directories.extend(directories)
