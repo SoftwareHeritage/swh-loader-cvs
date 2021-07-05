@@ -119,12 +119,12 @@ class CvsLoader(BaseLoader):
         # doing a lot of redundant work during every visit.
         for k in self.cvs_changesets:
             tstr = time.strftime('%c', time.gmtime(k.max_time))
-            self.log.debug("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
+            self.log.info("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
             # Check out the on-disk state of this revision
             for f in k.revs:
                 path = file_path(self.cvsroot_path, f.path)
                 wtpath = os.path.join(self.worktree_path, path)
-                self.log.debug("rev %s of file %s" % (f.rev, f.path));
+                self.log.info("rev %s of file %s" % (f.rev, f.path));
                 if f.state == 'dead':
                     # remove this file from work tree
                     try:
