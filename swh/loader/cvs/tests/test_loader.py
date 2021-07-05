@@ -69,3 +69,38 @@ def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
     }
 
     check_snapshot(RUNBABY_SNAPSHOT, loader.storage)
+
+def test_loader_cvs_2_visits_no_change(swh_storage, datadir, tmp_path):
+    """Eventful visit followed by uneventful visit should yield the same snapshot
+
+    """
+    archive_name = "runbaby"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+
+    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+
+    assert loader.load() == {"status": "eventful"}
+    visit_status1 = assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=RUNBABY_SNAPSHOT.id,
+    )
+
+    assert loader.load() == {"status": "uneventful"}
+    visit_status2 = assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=RUNBABY_SNAPSHOT.id,
+    )
+
+    assert visit_status1.date < visit_status2.date
+    assert visit_status1.snapshot == visit_status2.snapshot
+
+    stats = get_stats(loader.storage)
+    assert stats["origin_visit"] == 1 + 1  # computed twice the same snapshot
+    assert stats["snapshot"] == 1
