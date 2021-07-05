@@ -203,7 +203,10 @@ class CvsLoader(BaseLoader):
                 self.log.debug("rev %s of file %s" % (f.rev, f.path));
                 if f.state == 'dead':
                     # remove this file from work tree
-                    os.remove(wtpath)
+                    try:
+                        os.remove(wtpath)
+                    except FileNotFoundError:
+                        pass
                 else:
                     # create, or update, this file in the work tree
                     contents = self.rcs.expand_keyword(f.path, f.rev)
