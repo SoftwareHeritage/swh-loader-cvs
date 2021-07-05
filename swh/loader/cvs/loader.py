@@ -187,6 +187,19 @@ class CvsLoader(BaseLoader):
                 "we might be ingesting an incomplete copy of the repository" % self.cvsroot_path)
 
     def fetch_data(self):
+        """Fetch CVS revision information.
+
+        Unfortunately, there is no way to convert CVS history in an iterative fashion
+        because the data is not indexed by any kind of changeset ID. We need to walk
+        the history of each and every RCS file in the repository during every visit,
+        even if no new changes will be added to the SWH archive afterwards.
+        "CVS’s repository is the software equivalent of a telephone book sorted by telephone number."
+        https://corecursive.com/software-that-doesnt-suck-with-jim-blandy/
+
+        An implicit assumption made here is that self.cvs_changesets will fit into
+        memory in its entirety. If it won't fit then the CVS walker will need to
+        be modified such that it spools the list of changesets to disk instead.
+        """
         cvs = CvsConv(self.cvsroot_path, self.rcs, False, CHANGESET_FUZZ_SEC)
         self.log.debug("Walking CVS module %s", self.cvs_module_name)
         cvs.walk(self.cvs_module_name)
