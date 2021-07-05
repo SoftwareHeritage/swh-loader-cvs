@@ -459,7 +459,7 @@ def file_path(r, p):
 
 def git_dump_file(path, k, rcs, markseq):
     try:
-        cont = rcs.expand_keyword(path, k)
+        cont = rcs.expand_keyword(path, rcsparse.rcsfile(path), k)
     except RuntimeError as msg:
         print('Unexpected runtime error on parsing',
               path, k, ':', msg, file=sys.stderr)
@@ -547,8 +547,7 @@ class RcsKeywords:
                 fl |= self.RCS_KWEXP_ERR
         return fl
 
-    def expand_keyword(self, filename, r):
-        rcs = rcsparse.rcsfile(filename)
+    def expand_keyword(self, filename, rcs, r):
         rev = rcs.revs[r]
 
         mode = self.kflag_get(rcs.expand)
