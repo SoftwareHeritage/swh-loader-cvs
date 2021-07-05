@@ -68,4 +68,4 @@ def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
         "snapshot": 1,
     }
 
-    #check_snapshot(GOURMET_SNAPSHOT, loader.storage)
+    check_snapshot(RUNBABY_SNAPSHOT, loader.storage)
