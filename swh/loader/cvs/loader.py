@@ -175,6 +175,17 @@ class CvsLoader(BaseLoader):
     def prepare_origin_visit(self):
         self.origin = Origin(url=self.origin_url if self.origin_url else self.cvsroot_url)
 
+    def pre_cleanup(self):
+        """Cleanup potential dangling files from prior runs (e.g. OOM killed
+           tasks)
+
+        """
+        clean_dangling_folders(
+            self.temp_directory,
+            pattern_check=TEMPORARY_DIR_PREFIX_PATTERN,
+            log=self.log,
+        )
+
     def cleanup(self):
         self.log.info("cleanup")
 
