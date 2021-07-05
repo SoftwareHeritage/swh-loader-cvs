@@ -11,5 +11,3 @@ Reference Documentation
 
 .. toctree::
    :maxdepth: 2
-
-   /apidoc/swh.loader.cvs
