@@ -109,9 +109,9 @@ class CvsLoader(BaseLoader):
     def cleanup(self):
         self.log.info("cleanup")
 
-    def fetch_cvs_repo_with_rsync(self, host, path_on_server):
+    def fetch_cvs_repo_with_rsync(self, host, path):
         # URL *must* end with a trailing slash in order to get CVSROOT listed
-        url = 'rsync://%s%s/' % (host, path_on_server)
+        url = 'rsync://%s%s/' % (host, os.path.dirname(path))
         rsync = subprocess.run(['rsync', url], capture_output=True, encoding='ascii')
         rsync.check_returncode()
         have_cvsroot = False
