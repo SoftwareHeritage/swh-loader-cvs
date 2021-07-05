@@ -20,7 +20,6 @@ from typing import Dict, Iterator, List, Optional, Tuple
 from swh.loader.core.loader import BaseLoader
 from swh.loader.core.utils import clean_dangling_folders
 from swh.loader.exception import NotFound
-from swh.loader.cvs.cvs import CvsRepo
 from swh.model import from_disk, hashutil
 from swh.model.model import (
     Content,
