@@ -52,11 +52,10 @@ setup(
     use_scm_version=True,
     extras_require={"testing": parse_requirements("test")},
     include_package_data=True,
-    # uncomment when ready
-    # entry_points="""
-    #     [swh.workers]
-    #     loader.cvs=swh.loader.cvs
-    # """,
+    entry_points="""
+        [swh.workers]
+        loader.cvs=swh.loader.cvs:register
+    """,
     classifiers=[
         "Programming Language :: Python :: 3",
         "Intended Audience :: Developers",
