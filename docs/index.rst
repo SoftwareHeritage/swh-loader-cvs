@@ -1,15 +1,15 @@
-.. _swh-py-template:
+.. _swh-loader-cvs:
 
-.. include:: README.rst
+Software Heritage - CVS loader
+==============================
+
+Loader for <https://savannah.nongnu.org/projects/cvs>`_ repositories.
+
+
+Reference Documentation
+-----------------------
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
-
-Indices and tables
-------------------
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   /apidoc/swh.loader.cvs
