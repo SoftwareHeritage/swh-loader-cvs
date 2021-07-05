@@ -77,7 +77,6 @@ class CvsLoader(BaseLoader):
         self.cvs_module_name = None
         self.cvs_module_path = None
         self.cvs_changesets = None
-        self.rcs = RcsKeywords()
         # internal state used to store swh objects
         self._contents: List[Content] = []
         self._skipped_contents: List[SkippedContent] = []
@@ -121,7 +120,8 @@ class CvsLoader(BaseLoader):
                         pass
                 else:
                     # create, or update, this file in the work tree
-                    contents = self.rcs.expand_keyword(f.path, f.rev)
+                    rcs = RcsKeywords()
+                    contents = rcs.expand_keyword(f.path, f.rev)
                     try:
                         outfile = open(wtpath, mode='wb')
                     except FileNotFoundError:
@@ -262,7 +262,7 @@ class CvsLoader(BaseLoader):
         # An implicit assumption made here is that self.cvs_changesets will fit into
         # memory in its entirety. If it won't fit then the CVS walker will need to
         # be modified such that it spools the list of changesets to disk instead.
-        cvs = CvsConv(self.cvsroot_path, self.rcs, False, CHANGESET_FUZZ_SEC)
+        cvs = CvsConv(self.cvsroot_path, RcsKeywords(), False, CHANGESET_FUZZ_SEC)
         self.log.debug("Walking CVS module %s", self.cvs_module_name)
         cvs.walk(self.cvs_module_name)
         self.cvs_changesets = sorted(cvs.changesets)
