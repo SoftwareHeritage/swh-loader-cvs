@@ -276,7 +276,7 @@ class CvsLoader(BaseLoader):
         # memory in its entirety. If it won't fit then the CVS walker will need to
         # be modified such that it spools the list of changesets to disk instead.
         cvs = CvsConv(self.cvsroot_path, RcsKeywords(), False, CHANGESET_FUZZ_SEC)
-        self.log.debug("Walking CVS module %s", self.cvs_module_name)
+        self.log.info("Walking CVS module %s", self.cvs_module_name)
         cvs.walk(self.cvs_module_name)
         self.cvs_changesets = sorted(cvs.changesets)
         self.log.info('CVS changesets found in %s: %d' % (self.cvs_module_name, len(self.cvs_changesets)))
