@@ -19,7 +19,7 @@ from swh.model.model import Snapshot, SnapshotBranch, TargetType
 def test_loader_cvs_not_found_no_mock(swh_storage, tmp_path):
     """Given an unknown repository, the loader visit ends up in status not_found"""
     unknown_repo_url = "unknown-repository"
-    loader = CvsLoader(swh_storage, unknown_repo_url, destination_path=tmp_path)
+    loader = CvsLoader(swh_storage, unknown_repo_url, cvsroot_path=tmp_path)
 
     assert loader.load() == {"status": "uneventful"}
 
@@ -28,13 +28,13 @@ def test_loader_cvs_not_found_no_mock(swh_storage, tmp_path):
     )
 
 
-def test_loader_svn_cvs_visit(swh_storage, datadir, tmp_path):
+def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
     """Eventful visit should yield 1 snapshot"""
     archive_name = "runbaby"
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
 
-    loader = CvsLoader(swh_storage, repo_url, destination_path=tmp_path)
+    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=tmp_path)
 
     assert loader.load() == {"status": "eventful"}
 
