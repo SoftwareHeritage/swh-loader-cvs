@@ -16,15 +16,16 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 from urllib3.util import parse_url
 
 from swh.loader.core.loader import BaseLoader
 from swh.loader.core.utils import clean_dangling_folders
 from swh.loader.exception import NotFound
 import swh.loader.cvs.rcsparse as rcsparse
-from swh.loader.cvs.cvs2gitdump.cvs2gitdump import CvsConv, RcsKeywords, CHANGESET_FUZZ_SEC, file_path
+from swh.loader.cvs.cvs2gitdump.cvs2gitdump import CvsConv, RcsKeywords, CHANGESET_FUZZ_SEC, file_path, ChangeSetKey
 from swh.model import from_disk, hashutil
+from swh.model.model import Person, Revision, RevisionType, TimestampWithTimezone
 from swh.model.model import (
     Content,
     Directory,
@@ -206,10 +207,86 @@ class CvsLoader(BaseLoader):
         self.cvs_changesets = sorted(cvs.changesets)
         self.log.info('CVS changesets found in %s: %d' % (self.cvs_module_name, len(self.cvs_changesets)))
 
+    def build_swh_revision(self,
+        k: ChangeSetKey, dir_id: bytes, parents: Sequence[bytes]
+    ) -> Revision:
+        """Given a CVS revision, build a swh revision.
+
+        Args:
+            commit: the commit data: revision id, date, author, and message
+            dir_id: the tree's hash identifier
+            parents: the revision's parents identifier
+
+        Returns:
+            The swh revision dictionary.
+
+        """
+        author = Person.from_fullname(k.author.encode('UTF-8'))
+        date = TimestampWithTimezone.from_datetime(k.max_time)
+        # XXX parsing the rcsfile twice, once in expand_keyword(), and again here
+        rcs = rcsparse.rcsfile(k.revs[0].path)
+        msg = rcs.getlog(k.revs[0].rev)
+
+        return Revision(
+            type=RevisionType.CVS,
+            date=date,
+            committer_date=date,
+            directory=dir_id,
+            message=msg,
+            author=author,
+            committer=author,
+            synthetic=True,
+            extra_headers=[],
+            parents=tuple(parents))
+
+    def generate_and_load_snapshot(
+        self, revision: Optional[Revision] = None, snapshot: Optional[Snapshot] = None
+    ) -> Snapshot:
+        """Create the snapshot either from existing revision or snapshot.
+
+        Revision (supposedly new) has priority over the snapshot
+        (supposedly existing one).
+
+        Args:
+            revision (dict): Last revision seen if any (None by default)
+            snapshot (dict): Snapshot to use if any (None by default)
+
+        Returns:
+            Optional[Snapshot] The newly created snapshot
+
+        """
+        if revision:  # Priority to the revision
+            snap = Snapshot(
+                branches={
+                    DEFAULT_BRANCH: SnapshotBranch(
+                        target=revision.id, target_type=TargetType.REVISION
+                    )
+                }
+            )
+        elif snapshot:  # Fallback to prior snapshot
+            snap = snapshot
+        else:
+            raise ValueError(
+                "generate_and_load_snapshot called with null revision and snapshot!"
+            )
+        self.log.debug("snapshot: %s" % snap)
+        self.storage.snapshot_add([snap])
+        return snap
+
     def store_data(self):
+        """Add CVS revisions to the archive.
+
+        Compute SWH changeset IDs from CVS revision information and add new
+        revisions to the archive.
+        """
+        # XXX At present changeset IDs are recomputed on the fly during every visit.
+        # If we were able to maintain a cached somewhere which can be indexed by a
+        # cvs2gitdump.ChangeSetKey and yields an SWH revision hash we could avoid
+        # doing a lot of redundant work during every visit.
         for k in self.cvs_changesets:
             tstr = time.strftime('%c', time.gmtime(k.max_time))
             self.log.debug("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
+            # Check out the on-disk state of this revision
             for f in k.revs:
                 path = file_path(self.cvsroot_path, f.path)
                 wtpath = os.path.join(self.worktree_path, path)
@@ -230,6 +307,27 @@ class CvsLoader(BaseLoader):
                         outfile = open(wtpath, mode='wb')
                     outfile.write(contents)
                     outfile.close()
+
+            # Compute SWH revision from the on-disk state
+            swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
+            (content, skipped_content, directories) = from_disk.iter_directory(swh_dir)
+            revision = self.build_swh_revision(k, swh_dir.hash, [])
+            self.log.debug("SWH revision: %s" % revision)
+            self._contents.extend(content)
+            self._skipped_contents.extend(skipped_content)
+            self._directories.extend(directories)
+            self._revisions.append(revision)
+            self._last_revision = revision
+
+        self.storage.skipped_content_add(self._skipped_contents)
+        self.storage.content_add(self._contents)
+        self.storage.directory_add(self._directories)
+        self.storage.revision_add(self._revisions)
+        self.snapshot = self.generate_and_load_snapshot(
+            revision=self._last_revision, snapshot=self._snapshot
+        )
+        self.flush()
+        self.loaded_snapshot_id = self.snapshot.id
 
     def load_status(self):
         return {
