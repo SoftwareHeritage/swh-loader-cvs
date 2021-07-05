@@ -19,6 +19,8 @@ from swh.loader.core.loader import BaseLoader
 from swh.loader.core.utils import clean_dangling_folders
 from swh.loader.exception import NotFound
 import swh.loader.cvs.rcsparse as rcsparse
+import swh.loader.cvs.cvsclient as cvsclient
+from swh.loader.cvs.rlog import RlogConv
 from swh.loader.cvs.cvs2gitdump.cvs2gitdump import CvsConv, RcsKeywords, CHANGESET_FUZZ_SEC, file_path, ChangeSetKey
 from swh.model import from_disk, hashutil
 from swh.model.model import Person, Revision, RevisionType, TimestampWithTimezone
@@ -69,9 +71,20 @@ class CvsLoader(BaseLoader):
         self.origin_url = origin_url if origin_url else self.cvsroot_url
         self.temp_directory = temp_directory
         self.done = False
+
         self.cvs_module_name = None
-        self.cvs_module_path = None
+
+        # XXX At present changeset IDs are recomputed on the fly during every visit.
+        # If we were able to maintain a cached somewhere which can be indexed by a
+        # cvs2gitdump.ChangeSetKey and yields an SWH revision hash we could avoid
+        # doing a lot of redundant work during every visit.
+
         self.cvs_changesets = None
+
+        # remote CVS repository access (history is parsed from CVS rlog):
+        self.cvsclient = None
+        self.rlog_file = None
+
         # internal state used to store swh objects
         self._contents: List[Content] = []
         self._skipped_contents: List[SkippedContent] = []
@@ -86,6 +99,30 @@ class CvsLoader(BaseLoader):
         self.cvsroot_path = cvsroot_path
         self.snapshot = None
 
+    def compute_swh_revision(self, k, logmsg):
+        """Compute swh hash data per CVS changeset.
+
+        Returns:
+            tuple (rev, swh_directory)
+            - rev: current SWH revision computed from checked out work tree
+            - swh_directory: dictionary of path, swh hash data with type
+
+        """
+        # Compute SWH revision from the on-disk state
+        swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
+        if self._last_revision:
+            parents = tuple([bytes(self._last_revision.id)])
+        else:
+            parents = ()
+        revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
+        self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
+        self._last_revision = revision
+        if self._load_status == "uneventful":
+            # We have an eventful load if this revision is not already present in the archive
+            if not self.storage.revision_get([revision.id])[0]:
+                self._load_status = "eventful"
+        return (revision, swh_dir)
+
     def swh_hash_data_per_cvs_changeset(self):
         """Compute swh hash data per CVS changeset.
 
@@ -95,10 +132,6 @@ class CvsLoader(BaseLoader):
             - swh_directory: dictionary of path, swh hash data with type
 
         """
-        # XXX At present changeset IDs are recomputed on the fly during every visit.
-        # If we were able to maintain a cached somewhere which can be indexed by a
-        # cvs2gitdump.ChangeSetKey and yields an SWH revision hash we could avoid
-        # doing a lot of redundant work during every visit.
         for k in self.cvs_changesets:
             tstr = time.strftime('%c', time.gmtime(k.max_time))
             self.log.info("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
@@ -132,22 +165,54 @@ class CvsLoader(BaseLoader):
                     outfile.write(contents)
                     outfile.close()
 
-            # Compute SWH revision from the on-disk state
-            swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
-            if self._last_revision:
-                parents = tuple([bytes(self._last_revision.id)])
-            else:
-                parents = ()
-            revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
-            self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
-            self._last_revision = revision
-            if self._load_status == "uneventful":
-                # We have an eventful load if this revision is not already present in the archive
-                if not self.storage.revision_get([revision.id])[0]:
-                    self._load_status = "eventful"
-
+            (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
             yield revision, swh_dir
 
+    def swh_hash_data_per_cvs_rlog_changeset(self):
+        """Compute swh hash data per CVS rlog changeset.
+
+        Yields:
+            tuple (rev, swh_directory)
+            - rev: current SWH revision computed from checked out work tree
+            - swh_directory: dictionary of path, swh hash data with type
+
+        """
+        for k in self.cvs_changesets:
+            tstr = time.strftime('%c', time.gmtime(k.max_time))
+            self.log.info("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
+            logmsg = ""
+            # Check out the on-disk state of this revision
+            for f in k.revs:
+                path = file_path(self.cvsroot_path, f.path)
+                wtpath = os.path.join(self.worktree_path, path)
+                self.log.info("rev %s of file %s" % (f.rev, f.path));
+                if not logmsg:
+                    logmsg = self.rlog.getlog(self.rlog_file, f.path, k.revs[0].rev)
+                self.log.debug("f.state is %s\n" % f.state)
+                if f.state == 'dead':
+                    # remove this file from work tree
+                    try:
+                        os.remove(wtpath)
+                    except FileNotFoundError:
+                        pass
+                else:
+                    dirname = os.path.dirname(wtpath)
+                    try:
+                        os.makedirs(dirname)
+                    except FileExistsError:
+                        pass
+                    self.log.debug("checkout to %s\n" % wtpath)
+                    fp = self.cvsclient.checkout(f.path, f.rev, dirname)
+                    os.rename(fp.name, wtpath)
+                    try:
+                       fp.close()
+                    except FileNotFoundError:
+                        # Well, we have just renamed the file...
+                        pass
+
+            # TODO: prune empty directories?
+            (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
+            yield revision, swh_dir
 
     def process_cvs_changesets(self) -> Iterator[
         Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
@@ -166,6 +231,22 @@ class CvsLoader(BaseLoader):
             (_contents, _skipped_contents, _directories) = from_disk.iter_directory(swh_dir)
             yield _contents, _skipped_contents, _directories, swh_revision
 
+    def process_cvs_rlog_changesets(self) -> Iterator[
+        Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
+    ]:
+        """Process CVS rlog revisions.
+
+        At each CVS revision, check out contents and compute swh hashes.
+
+        Yields:
+            tuple (contents, skipped-contents, directories, revision) of dict as a
+            dictionary with keys, sha1_git, sha1, etc...
+
+        """
+        for swh_revision, swh_dir in self.swh_hash_data_per_cvs_rlog_changeset():
+            # Send the associated contents/directories
+            (_contents, _skipped_contents, _directories) = from_disk.iter_directory(swh_dir)
+            yield _contents, _skipped_contents, _directories, swh_revision
 
     def prepare_origin_visit(self):
         self.origin = Origin(url=self.origin_url if self.origin_url else self.cvsroot_url)
@@ -229,59 +310,72 @@ class CvsLoader(BaseLoader):
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
         self.cvs_module_name = os.path.basename(url.path)
         os.mkdir(os.path.join(self.worktree_path, self.cvs_module_name));
-        self.cvs_module_path = os.path.join(self.cvsroot_path, self.cvs_module_name)
         if url.scheme == 'file':
             if not os.path.exists(url.path):
                 raise NotFound
         elif url.scheme == 'rsync':
-            self.fetch_cvs_repo_with_rsync(url.host, url.path)
+              self.fetch_cvs_repo_with_rsync(url.host, url.path)
+
+        if url.scheme == 'file' or url.scheme == 'rsync':
+            # local CVS repository conversion
+            have_rcsfile = False
+            have_cvsroot = False
+            for root, dirs, files in os.walk(self.cvsroot_path):
+                if 'CVSROOT' in dirs:
+                    have_cvsroot = True
+                    dirs.remove('CVSROOT')
+                    continue;
+                for f in files:
+                    filepath = os.path.join(root, f)
+                    if f[-2:] == ',v':
+                        try:
+                          rcsfile = rcsparse.rcsfile(filepath)
+                        except(Exception):
+                            raise
+                        else:
+                            self.log.debug("Looks like we have data to convert; "
+                                "found a valid RCS file at %s" % filepath)
+                            have_rcsfile = True
+                            break
+                if have_rcsfile:
+                    break;
+
+            if not have_rcsfile:
+                raise NotFound("Directory %s does not contain any valid RCS files %s" % self.cvsroot_path)
+            if not have_cvsroot:
+                self.log.warn("The CVS repository at '%s' lacks a CVSROOT directory; "
+                    "we might be ingesting an incomplete copy of the repository" % self.cvsroot_path)
+
+            # Unfortunately, there is no way to convert CVS history in an iterative fashion
+            # because the data is not indexed by any kind of changeset ID. We need to walk
+            # the history of each and every RCS file in the repository during every visit,
+            # even if no new changes will be added to the SWH archive afterwards.
+            # "CVS’s repository is the software equivalent of a telephone book sorted by telephone number."
+            # https://corecursive.com/software-that-doesnt-suck-with-jim-blandy/
+            #
+            # An implicit assumption made here is that self.cvs_changesets will fit into
+            # memory in its entirety. If it won't fit then the CVS walker will need to
+            # be modified such that it spools the list of changesets to disk instead.
+            cvs = CvsConv(self.cvsroot_path, RcsKeywords(), False, CHANGESET_FUZZ_SEC)
+            self.log.info("Walking CVS module %s", self.cvs_module_name)
+            cvs.walk(self.cvs_module_name)
+            self.cvs_changesets = sorted(cvs.changesets)
+            self.log.info('CVS changesets found in %s: %d' % (self.cvs_module_name, len(self.cvs_changesets)))
+            self.swh_revision_gen = self.process_cvs_changesets()
+        elif url.scheme == 'pserver' or url.scheme == 'fake':
+            # remote CVS repository conversion
+            self.cvsclient = cvsclient.CVSClient(url)
+            cvsroot_path = os.path.dirname(url.path)
+            self.log.info("Fetching CVS rlog from %s:%s/%s", url.host, cvsroot_path, self.cvs_module_name)
+            self.rlog = RlogConv(cvsroot_path, CHANGESET_FUZZ_SEC)
+            self.rlog_file = self.cvsclient.fetch_rlog()
+            self.rlog.parse_rlog(self.rlog_file)
+            self.cvs_changesets = sorted(self.rlog.changesets)
+            self.log.info('CVS changesets found for %s: %d' % (self.cvs_module_name, len(self.cvs_changesets)))
+            self.swh_revision_gen = self.process_cvs_rlog_changesets()
         else:
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
-        have_rcsfile = False
-        have_cvsroot = False
-        for root, dirs, files in os.walk(self.cvsroot_path):
-            if 'CVSROOT' in dirs:
-                have_cvsroot = True
-                dirs.remove('CVSROOT')
-                continue;
-            for f in files:
-                filepath = os.path.join(root, f)
-                if f[-2:] == ',v':
-                    try:
-                      rcsfile = rcsparse.rcsfile(filepath)
-                    except(Exception):
-                        raise
-                    else:
-                        self.log.debug("Looks like we have data to convert; "
-                            "found a valid RCS file at %s" % filepath)
-                        have_rcsfile = True
-                        break
-            if have_rcsfile:
-                break;
 
-        if not have_rcsfile:
-            raise NotFound("Directory %s does not contain any valid RCS files %s" % self.cvsroot_path)
-        if not have_cvsroot:
-            self.log.warn("The CVS repository at '%s' lacks a CVSROOT directory; "
-                "we might be ingesting an incomplete copy of the repository" % self.cvsroot_path)
-
-        # Unfortunately, there is no way to convert CVS history in an iterative fashion
-        # because the data is not indexed by any kind of changeset ID. We need to walk
-        # the history of each and every RCS file in the repository during every visit,
-        # even if no new changes will be added to the SWH archive afterwards.
-        # "CVS’s repository is the software equivalent of a telephone book sorted by telephone number."
-        # https://corecursive.com/software-that-doesnt-suck-with-jim-blandy/
-        #
-        # An implicit assumption made here is that self.cvs_changesets will fit into
-        # memory in its entirety. If it won't fit then the CVS walker will need to
-        # be modified such that it spools the list of changesets to disk instead.
-        cvs = CvsConv(self.cvsroot_path, RcsKeywords(), False, CHANGESET_FUZZ_SEC)
-        self.log.info("Walking CVS module %s", self.cvs_module_name)
-        cvs.walk(self.cvs_module_name)
-        self.cvs_changesets = sorted(cvs.changesets)
-        self.log.info('CVS changesets found in %s: %d' % (self.cvs_module_name, len(self.cvs_changesets)))
-        # SWH revisions are generated and stored iteratively to avoid high memory consumption
-        self.swh_revision_gen = self.process_cvs_changesets()
 
     def fetch_data(self):
         """Fetch the next CVS revision."""

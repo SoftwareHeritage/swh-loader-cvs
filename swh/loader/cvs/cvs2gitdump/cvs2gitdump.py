@@ -448,7 +448,10 @@ class CvsConv:
 def file_path(r, p):
     if r.endswith('/'):
         r = r[:-1]
-    path = p[:-2]               # drop ",v"
+    if p[-2:] == ',v':
+        path = p[:-2]               # drop ",v"
+    else:
+        path = p
     p = path.split('/')
     if len(p) > 0 and p[-2] == 'Attic':
         path = '/'.join(p[:-2] + [p[-1]])

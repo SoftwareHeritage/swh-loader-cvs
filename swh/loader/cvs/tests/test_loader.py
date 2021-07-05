@@ -221,3 +221,39 @@ def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
 
     assert visit_status1.date < visit_status2.date
     assert visit_status1.snapshot != visit_status2.snapshot
+
+def test_loader_cvs_visit_pserver(swh_storage, datadir, tmp_path):
+    """Eventful visit to CVS pserver should yield 1 snapshot"""
+    archive_name = "runbaby"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += '/runbaby' # CVS module name
+
+    # Ask our cvsclient to connect via the 'cvs server' command
+    repo_url = 'fake://' + repo_url[7:]
+
+    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=RUNBABY_SNAPSHOT.id,
+    )
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 5,
+        "directory": 2,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 1,
+        "skipped_content": 0,
+        "snapshot": 1,
+    }
+
+    check_snapshot(RUNBABY_SNAPSHOT, loader.storage)
