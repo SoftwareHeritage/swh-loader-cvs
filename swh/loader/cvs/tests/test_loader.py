@@ -104,3 +104,45 @@ def test_loader_cvs_2_visits_no_change(swh_storage, datadir, tmp_path):
     stats = get_stats(loader.storage)
     assert stats["origin_visit"] == 1 + 1  # computed twice the same snapshot
     assert stats["snapshot"] == 1
+
+GREEK_SNAPSHOT = Snapshot(
+    id=hash_to_bytes("5e74af67d69dfd7aea0eb118154d062f71f50120"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("e18b92f14cd5b3efb3fcb4ea46cfaf97f25f301b"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+def test_loader_cvs_with_file_additions_and_deletions(swh_storage, datadir, tmp_path):
+    """Eventful conversion of history with file additions and deletions"""
+    archive_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += '/greek-tree' # CVS module name
+    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT.id,
+    )
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 8,
+        "directory": 20,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 7,
+        "skipped_content": 0,
+        "snapshot": 7,
+    }
+
+    check_snapshot(GREEK_SNAPSHOT, loader.storage)
