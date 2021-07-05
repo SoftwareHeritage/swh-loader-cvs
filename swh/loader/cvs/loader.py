@@ -83,7 +83,6 @@ class CvsLoader(BaseLoader):
         self._skipped_contents: List[SkippedContent] = []
         self._directories: List[Directory] = []
         self._revisions: List[Revision] = []
-        self._snapshot: Optional[Snapshot] = None
         self.swh_revision_gen = None
         # internal state, current visit
         self._last_revision = None
@@ -316,36 +315,23 @@ class CvsLoader(BaseLoader):
             extra_headers=[],
             parents=tuple(parents))
 
-    def generate_and_load_snapshot(
-        self, revision: Optional[Revision] = None, snapshot: Optional[Snapshot] = None
-    ) -> Snapshot:
-        """Create the snapshot either from existing revision or snapshot.
-
-        Revision (supposedly new) has priority over the snapshot
-        (supposedly existing one).
+    def generate_and_load_snapshot(self, revision) -> Snapshot:
+        """Create the snapshot either from existing revision.
 
         Args:
             revision (dict): Last revision seen if any (None by default)
-            snapshot (dict): Snapshot to use if any (None by default)
 
         Returns:
             Optional[Snapshot] The newly created snapshot
 
         """
-        if revision:  # Priority to the revision
-            snap = Snapshot(
-                branches={
-                    DEFAULT_BRANCH: SnapshotBranch(
-                        target=revision.id, target_type=TargetType.REVISION
-                    )
-                }
-            )
-        elif snapshot:  # Fallback to prior snapshot
-            snap = snapshot
-        else:
-            raise ValueError(
-                "generate_and_load_snapshot called with null revision and snapshot!"
-            )
+        snap = Snapshot(
+            branches={
+                DEFAULT_BRANCH: SnapshotBranch(
+                    target=revision.id, target_type=TargetType.REVISION
+                )
+            }
+        )
         self.log.debug("snapshot: %s" % snap)
         self.storage.snapshot_add([snap])
         return snap
@@ -356,9 +342,7 @@ class CvsLoader(BaseLoader):
         self.storage.content_add(self._contents)
         self.storage.directory_add(self._directories)
         self.storage.revision_add(self._revisions)
-        self.snapshot = self.generate_and_load_snapshot(
-            revision=self._last_revision, snapshot=self._snapshot
-        )
+        self.snapshot = self.generate_and_load_snapshot(self._last_revision)
         self.log.debug("SWH snapshot ID: %s" % hashutil.hash_to_hex(self.snapshot.id))
         self.flush()
         self.loaded_snapshot_id = self.snapshot.id
