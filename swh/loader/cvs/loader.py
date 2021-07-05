@@ -107,11 +107,16 @@ class CvsLoader(BaseLoader):
         for k in self.cvs_changesets:
             tstr = time.strftime('%c', time.gmtime(k.max_time))
             self.log.info("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
+            logmsg = ""
             # Check out the on-disk state of this revision
             for f in k.revs:
+                rcsfile = None
                 path = file_path(self.cvsroot_path, f.path)
                 wtpath = os.path.join(self.worktree_path, path)
                 self.log.info("rev %s of file %s" % (f.rev, f.path));
+                if not logmsg:
+                    rcsfile = rcsparse.rcsfile(f.path)
+                    logmsg = rcsfile.getlog(k.revs[0].rev)
                 if f.state == 'dead':
                     # remove this file from work tree
                     try:
@@ -120,8 +125,10 @@ class CvsLoader(BaseLoader):
                         pass
                 else:
                     # create, or update, this file in the work tree
+                    if not rcsfile:
+                        rcsfile = rcsparse.rcsfile(f.path)
                     rcs = RcsKeywords()
-                    contents = rcs.expand_keyword(f.path, f.rev)
+                    contents = rcs.expand_keyword(f.path, rcsfile, f.rev)
                     try:
                         outfile = open(wtpath, mode='wb')
                     except FileNotFoundError:
@@ -136,7 +143,7 @@ class CvsLoader(BaseLoader):
                 parents = tuple([bytes(self._last_revision.id)])
             else:
                 parents = ()
-            revision = self.build_swh_revision(k, swh_dir.hash, parents)
+            revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
             self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
             self._last_revision = revision
             if self._load_status == "uneventful":
@@ -284,12 +291,13 @@ class CvsLoader(BaseLoader):
         return True
 
     def build_swh_revision(self,
-        k: ChangeSetKey, dir_id: bytes, parents: Sequence[bytes]
+        k: ChangeSetKey, logmsg: bytes, dir_id: bytes, parents: Sequence[bytes]
     ) -> Revision:
         """Given a CVS revision, build a swh revision.
 
         Args:
-            commit: the commit data: revision id, date, author, and message
+            k: changeset data
+            logmsg: the changeset's log message 
             dir_id: the tree's hash identifier
             parents: the revision's parents identifier
 
@@ -299,16 +307,13 @@ class CvsLoader(BaseLoader):
         """
         author = Person.from_fullname(k.author.encode('UTF-8'))
         date = TimestampWithTimezone.from_datetime(k.max_time)
-        # XXX parsing the rcsfile twice, once in expand_keyword(), and again here
-        rcs = rcsparse.rcsfile(k.revs[0].path)
-        msg = rcs.getlog(k.revs[0].rev)
 
         return Revision(
             type=RevisionType.CVS,
             date=date,
             committer_date=date,
             directory=dir_id,
-            message=msg,
+            message=logmsg,
             author=author,
             committer=author,
             synthetic=True,
