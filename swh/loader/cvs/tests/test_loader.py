@@ -16,6 +16,16 @@ from swh.loader.tests import (
 from swh.model.hashutil import hash_to_bytes
 from swh.model.model import Snapshot, SnapshotBranch, TargetType
 
+RUNBABY_SNAPSHOT = Snapshot(
+    id=hash_to_bytes("1cff69ab9bd70822d5e3006092f943ccaafdcf57"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("ef511d258fa55035c2bc2a5b05cad233cee1d328"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
 def test_loader_cvs_not_found_no_mock(swh_storage, tmp_path):
     """Given an unknown repository, the loader visit ends up in status not_found"""
     unknown_repo_url = "unknown-repository"
@@ -42,18 +52,18 @@ def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
         loader.storage,
         repo_url,
         status="full",
-        type="svn",
-        snapshot=GOURMET_SNAPSHOT.id,
+        type="cvs",
+        snapshot=RUNBABY_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
     assert stats == {
-        "content": 19,
-        "directory": 17,
+        "content": 5,
+        "directory": 2,
         "origin": 1,
         "origin_visit": 1,
         "release": 0,
-        "revision": 6,
+        "revision": 1,
         "skipped_content": 0,
         "snapshot": 1,
     }

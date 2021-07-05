@@ -206,6 +206,8 @@ class CvsLoader(BaseLoader):
         cvs.walk(self.cvs_module_name)
         self.cvs_changesets = sorted(cvs.changesets)
         self.log.info('CVS changesets found in %s: %d' % (self.cvs_module_name, len(self.cvs_changesets)))
+        if len(self.cvs_changesets) > 0:
+            self._load_status = "eventful"
 
     def build_swh_revision(self,
         k: ChangeSetKey, dir_id: bytes, parents: Sequence[bytes]
@@ -312,7 +314,7 @@ class CvsLoader(BaseLoader):
             swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
             (content, skipped_content, directories) = from_disk.iter_directory(swh_dir)
             revision = self.build_swh_revision(k, swh_dir.hash, [])
-            self.log.debug("SWH revision: %s" % revision)
+            self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
             self._contents.extend(content)
             self._skipped_contents.extend(skipped_content)
             self._directories.extend(directories)
@@ -326,6 +328,7 @@ class CvsLoader(BaseLoader):
         self.snapshot = self.generate_and_load_snapshot(
             revision=self._last_revision, snapshot=self._snapshot
         )
+        self.log.debug("SWH snapshot ID: %s" % hashutil.hash_to_hex(self.snapshot.id))
         self.flush()
         self.loaded_snapshot_id = self.snapshot.id
 
