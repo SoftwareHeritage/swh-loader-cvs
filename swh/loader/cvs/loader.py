@@ -91,6 +91,7 @@ class CvsLoader(BaseLoader):
         self._directories: List[Directory] = []
         self._revisions: List[Revision] = []
         self._snapshot: Optional[Snapshot] = None
+        self.swh_revision_gen = None
         # internal state, current visit
         self._last_revision = None
         self._visit_status = "full"
@@ -102,6 +103,75 @@ class CvsLoader(BaseLoader):
         # state from previous visit
         self.latest_snapshot = None
         self.latest_revision = None
+
+    def swh_hash_data_per_cvs_changeset(self):
+        """Compute swh hash data per CVS changeset.
+
+        Yields:
+            tuple (rev, swh_directory)
+            - rev: current SWH revision computed from checked out work tree
+            - swh_directory: dictionary of path, swh hash data with type
+
+        """
+        # XXX At present changeset IDs are recomputed on the fly during every visit.
+        # If we were able to maintain a cached somewhere which can be indexed by a
+        # cvs2gitdump.ChangeSetKey and yields an SWH revision hash we could avoid
+        # doing a lot of redundant work during every visit.
+        for k in self.cvs_changesets:
+            tstr = time.strftime('%c', time.gmtime(k.max_time))
+            self.log.debug("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
+            # Check out the on-disk state of this revision
+            for f in k.revs:
+                path = file_path(self.cvsroot_path, f.path)
+                wtpath = os.path.join(self.worktree_path, path)
+                self.log.debug("rev %s of file %s" % (f.rev, f.path));
+                if f.state == 'dead':
+                    # remove this file from work tree
+                    try:
+                        os.remove(wtpath)
+                    except FileNotFoundError:
+                        pass
+                else:
+                    # create, or update, this file in the work tree
+                    contents = self.rcs.expand_keyword(f.path, f.rev)
+                    try:
+                        outfile = open(wtpath, mode='wb')
+                    except FileNotFoundError:
+                        os.makedirs(os.path.dirname(wtpath))
+                        outfile = open(wtpath, mode='wb')
+                    outfile.write(contents)
+                    outfile.close()
+
+            # Compute SWH revision from the on-disk state
+            swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
+            revision = self.build_swh_revision(k, swh_dir.hash, [])
+            self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
+            self._last_revision = revision
+            if self._load_status == "uneventful":
+                # We have an eventful load if this revision is not already present in the archive
+                if not self.storage.revision_get([revision.id])[0]:
+                    self._load_status = "eventful"
+
+            yield revision, swh_dir
+
+
+    def process_cvs_changesets(self) -> Iterator[
+        Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
+    ]:
+        """Process CVS revisions.
+
+        At each CVS revision, check out contents and compute swh hashes.
+
+        Yields:
+            tuple (contents, skipped-contents, directories, revision) of dict as a
+            dictionary with keys, sha1_git, sha1, etc...
+
+        """
+        for swh_revision, swh_dir in self.swh_hash_data_per_cvs_changeset():
+            # Send the associated contents/directories
+            (_contents, _skipped_contents, _directories) = from_disk.iter_directory(swh_dir)
+            yield _contents, _skipped_contents, _directories, swh_revision
+
 
     def prepare_origin_visit(self):
         self.origin = Origin(url=self.origin_url if self.origin_url else self.cvsroot_url)
@@ -136,6 +206,7 @@ class CvsLoader(BaseLoader):
     def prepare(self):
         self._last_revision = None
         self._load_status = "uneventful"
+        self.swh_revision_gen = None
         if not self.cvsroot_path:
             self.cvsroot_path = tempfile.mkdtemp(
                 suffix="-%s" % os.getpid(),
@@ -189,25 +260,36 @@ class CvsLoader(BaseLoader):
             self.log.warn("The CVS repository at '%s' lacks a CVSROOT directory; "
                 "we might be ingesting an incomplete copy of the repository" % self.cvsroot_path)
 
-    def fetch_data(self):
-        """Fetch CVS revision information.
-
-        Unfortunately, there is no way to convert CVS history in an iterative fashion
-        because the data is not indexed by any kind of changeset ID. We need to walk
-        the history of each and every RCS file in the repository during every visit,
-        even if no new changes will be added to the SWH archive afterwards.
-        "CVS’s repository is the software equivalent of a telephone book sorted by telephone number."
-        https://corecursive.com/software-that-doesnt-suck-with-jim-blandy/
-
-        An implicit assumption made here is that self.cvs_changesets will fit into
-        memory in its entirety. If it won't fit then the CVS walker will need to
-        be modified such that it spools the list of changesets to disk instead.
-        """
+        # Unfortunately, there is no way to convert CVS history in an iterative fashion
+        # because the data is not indexed by any kind of changeset ID. We need to walk
+        # the history of each and every RCS file in the repository during every visit,
+        # even if no new changes will be added to the SWH archive afterwards.
+        # "CVS’s repository is the software equivalent of a telephone book sorted by telephone number."
+        # https://corecursive.com/software-that-doesnt-suck-with-jim-blandy/
+        #
+        # An implicit assumption made here is that self.cvs_changesets will fit into
+        # memory in its entirety. If it won't fit then the CVS walker will need to
+        # be modified such that it spools the list of changesets to disk instead.
         cvs = CvsConv(self.cvsroot_path, self.rcs, False, CHANGESET_FUZZ_SEC)
         self.log.debug("Walking CVS module %s", self.cvs_module_name)
         cvs.walk(self.cvs_module_name)
         self.cvs_changesets = sorted(cvs.changesets)
         self.log.info('CVS changesets found in %s: %d' % (self.cvs_module_name, len(self.cvs_changesets)))
+        # SWH revisions are generated and stored iteratively to avoid high memory consumption
+        self.swh_revision_gen = self.process_cvs_changesets()
+
+    def fetch_data(self):
+        """Fetch the next CVS revision."""
+        try:
+            data = next(self.swh_revision_gen)
+        except StopIteration:
+            return False
+        except Exception as e:
+            self.log.exception(e)
+            return False  # Stopping iteration
+        self._contents, self._skipped_contents, self._directories, rev = data
+        self._revisions = [rev]
+        return True
 
     def build_swh_revision(self,
         k: ChangeSetKey, dir_id: bytes, parents: Sequence[bytes]
@@ -276,56 +358,7 @@ class CvsLoader(BaseLoader):
         return snap
 
     def store_data(self):
-        """Add CVS revisions to the archive.
-
-        Compute SWH changeset IDs from CVS revision information and add new
-        revisions to the archive.
-        """
-        # XXX At present changeset IDs are recomputed on the fly during every visit.
-        # If we were able to maintain a cached somewhere which can be indexed by a
-        # cvs2gitdump.ChangeSetKey and yields an SWH revision hash we could avoid
-        # doing a lot of redundant work during every visit.
-        for k in self.cvs_changesets:
-            tstr = time.strftime('%c', time.gmtime(k.max_time))
-            self.log.debug("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
-            # Check out the on-disk state of this revision
-            for f in k.revs:
-                path = file_path(self.cvsroot_path, f.path)
-                wtpath = os.path.join(self.worktree_path, path)
-                self.log.debug("rev %s of file %s" % (f.rev, f.path));
-                if f.state == 'dead':
-                    # remove this file from work tree
-                    try:
-                        os.remove(wtpath)
-                    except FileNotFoundError:
-                        pass
-                else:
-                    # create, or update, this file in the work tree
-                    contents = self.rcs.expand_keyword(f.path, f.rev)
-                    try:
-                        outfile = open(wtpath, mode='wb')
-                    except FileNotFoundError:
-                        os.makedirs(os.path.dirname(wtpath))
-                        outfile = open(wtpath, mode='wb')
-                    outfile.write(contents)
-                    outfile.close()
-
-            # Compute SWH revision from the on-disk state
-            swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
-            (content, skipped_content, directories) = from_disk.iter_directory(swh_dir)
-            revision = self.build_swh_revision(k, swh_dir.hash, [])
-            self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
-            self._last_revision = revision
-            if self._load_status = "uneventful":
-                # We have an eventful load if this revision is not already present in the archive
-                if not self.storage.revision_get([revision.id])[0]:
-                    self._load_status = "eventful"
-            if self._load_status == "eventful":
-                self._contents.extend(content)
-                self._skipped_contents.extend(skipped_content)
-                self._directories.extend(directories)
-                self._revisions.append(revision)
-
+        "Add our current CVS changeset to the archive."
         self.storage.skipped_content_add(self._skipped_contents)
         self.storage.content_add(self._contents)
         self.storage.directory_add(self._directories)
@@ -336,6 +369,14 @@ class CvsLoader(BaseLoader):
         self.log.debug("SWH snapshot ID: %s" % hashutil.hash_to_hex(self.snapshot.id))
         self.flush()
         self.loaded_snapshot_id = self.snapshot.id
+        del self._skipped_contents
+        del self._contents
+        del self._directories
+        del self._revisions
+        self._skipped_contents = []
+        self._contents = []
+        self._directories = []
+        self._revisions = []
 
     def load_status(self):
         return {
