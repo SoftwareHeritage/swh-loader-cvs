@@ -61,11 +61,7 @@ class CvsLoader(BaseLoader):
         origin_url: Optional[str] = None,
         visit_date: Optional[datetime] = None,
         cvsroot_path: Optional[str] = None,
-        swh_revision: Optional[str] = None,
-        start_from_scratch: bool = False,
         temp_directory: str = "/tmp",
-        debug: bool = False,
-        check_revision: int = 0,
         max_content_size: Optional[int] = None,
     ):
         super().__init__(
@@ -76,15 +72,12 @@ class CvsLoader(BaseLoader):
         self.cvsroot_url = url
         # origin url as unique identifier for origin in swh archive
         self.origin_url = origin_url if origin_url else self.cvsroot_url
-        self.debug = debug
         self.temp_directory = temp_directory
         self.done = False
         self.cvs_module_name = None
         self.cvs_module_path = None
         self.cvs_changesets = None
         self.rcs = RcsKeywords()
-        # Revision check is configurable
-        self.check_revision = check_revision
         # internal state used to store swh objects
         self._contents: List[Content] = []
         self._skipped_contents: List[SkippedContent] = []
@@ -98,11 +91,7 @@ class CvsLoader(BaseLoader):
         self._load_status = "uneventful"
         self.visit_date = visit_date
         self.cvsroot_path = cvsroot_path
-        self.start_from_scratch = start_from_scratch
         self.snapshot = None
-        # state from previous visit
-        self.latest_snapshot = None
-        self.latest_revision = None
 
     def swh_hash_data_per_cvs_changeset(self):
         """Compute swh hash data per CVS changeset.
