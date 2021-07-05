@@ -8,15 +8,11 @@ swh-storage.
 
 """
 from datetime import datetime
-from mmap import ACCESS_WRITE, mmap
 import os
-import pty
-import re
-import shutil
 import subprocess
 import tempfile
 import time
-from typing import Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Iterator, List, Optional, Sequence, Tuple
 from urllib3.util import parse_url
 
 from swh.loader.core.loader import BaseLoader
@@ -36,7 +32,6 @@ from swh.model.model import (
     SnapshotBranch,
     TargetType,
 )
-from swh.storage.algos.snapshot import snapshot_get_latest
 from swh.storage.interface import StorageInterface
 
 DEFAULT_BRANCH = b"HEAD"
