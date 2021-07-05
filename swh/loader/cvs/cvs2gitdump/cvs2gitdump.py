@@ -36,7 +36,7 @@ import re
 import subprocess
 import sys
 import time
-import rcsparse
+import swh.loader.cvs.rcsparse as rcsparse
 
 CHANGESET_FUZZ_SEC = 300
 
