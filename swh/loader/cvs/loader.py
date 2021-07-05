@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from typing import Dict, Iterator, List, Optional, Tuple
 from urllib3.util import parse_url
 
@@ -22,7 +23,7 @@ from swh.loader.core.loader import BaseLoader
 from swh.loader.core.utils import clean_dangling_folders
 from swh.loader.exception import NotFound
 import swh.loader.cvs.rcsparse as rcsparse
-from swh.loader.cvs.cvs2gitdump.cvs2gitdump import CvsConv, RcsKeywords, CHANGESET_FUZZ_SEC
+from swh.loader.cvs.cvs2gitdump.cvs2gitdump import CvsConv, RcsKeywords, CHANGESET_FUZZ_SEC, file_path
 from swh.model import from_disk, hashutil
 from swh.model.model import (
     Content,
@@ -78,7 +79,9 @@ class CvsLoader(BaseLoader):
         self.temp_directory = temp_directory
         self.done = False
         self.cvs_module_name = None
+        self.cvs_module_path = None
         self.cvs_changesets = None
+        self.rcs = RcsKeywords()
         # Revision check is configurable
         self.check_revision = check_revision
         # internal state used to store swh objects
@@ -136,11 +139,18 @@ class CvsLoader(BaseLoader):
                 prefix=TEMPORARY_DIR_PREFIX_PATTERN,
                 dir=self.temp_directory,
             )
+        self.worktree_path = tempfile.mkdtemp(
+            suffix="-%s" % os.getpid(),
+            prefix=TEMPORARY_DIR_PREFIX_PATTERN,
+            dir=self.temp_directory,
+        )
         url = parse_url(self.origin_url)
         self.log.debug("prepare; origin_url=%s scheme=%s path=%s" % (self.origin_url, url.scheme, url.path))
         if not url.path:
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
         self.cvs_module_name = os.path.basename(url.path)
+        os.mkdir(os.path.join(self.worktree_path, self.cvs_module_name));
+        self.cvs_module_path = os.path.join(self.cvsroot_path, self.cvs_module_name)
         if url.scheme == 'file':
             if not os.path.exists(url.path):
                 raise NotFound
@@ -177,15 +187,29 @@ class CvsLoader(BaseLoader):
                 "we might be ingesting an incomplete copy of the repository" % self.cvsroot_path)
 
     def fetch_data(self):
-        rcs = RcsKeywords()
-        cvs = CvsConv(self.cvsroot_path, rcs, False, CHANGESET_FUZZ_SEC)
+        cvs = CvsConv(self.cvsroot_path, self.rcs, False, CHANGESET_FUZZ_SEC)
         self.log.debug("Walking CVS module %s", self.cvs_module_name)
         cvs.walk(self.cvs_module_name)
         self.cvs_changesets = sorted(cvs.changesets)
         self.log.info('CVS changesets found in %s: %d' % (self.cvs_module_name, len(self.cvs_changesets)))
 
     def store_data(self):
-        self.log.info("store data")
+        for k in self.cvs_changesets:
+            tstr = time.strftime('%c', time.gmtime(k.max_time))
+            self.log.debug("changeset from %s by %s on branch %s", tstr, k.author, k.branch);
+            for f in k.revs:
+                path = file_path(self.cvsroot_path, f.path)
+                wtpath = os.path.join(self.worktree_path, path)
+                self.log.debug("rev %s of file %s" % (f.rev, f.path));
+                if f.state == 'dead':
+                    # remove this file from work tree
+                    os.remove(wtpath)
+                else:
+                    # create, or update, this file in the work tree
+                    contents = self.rcs.expand_keyword(f.path, f.rev)
+                    outfile = open(wtpath, mode='wb')
+                    outfile.write(contents)
+                    outfile.close()
 
     def load_status(self):
         return {

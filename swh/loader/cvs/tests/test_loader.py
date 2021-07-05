@@ -34,7 +34,7 @@ def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
 
-    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=tmp_path)
+    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
 
     assert loader.load() == {"status": "eventful"}
 
