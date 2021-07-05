@@ -146,3 +146,78 @@ def test_loader_cvs_with_file_additions_and_deletions(swh_storage, datadir, tmp_
     }
 
     check_snapshot(GREEK_SNAPSHOT, loader.storage)
+
+GREEK_SNAPSHOT2 = Snapshot(
+    id=hash_to_bytes("048885ae2145ffe81588aea95dcf75c536ecdf26"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("55eb1438c03588607ce4b8db8f45e8e23075951b"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+
+def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
+    """Eventful visit followed by eventful visit should yield two snapshots"""
+    archive_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += '/greek-tree' # CVS module name
+    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+
+    assert loader.load() == {"status": "eventful"}
+
+    visit_status1 = assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT.id,
+    )
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 8,
+        "directory": 20,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 7,
+        "skipped_content": 0,
+        "snapshot": 7,
+    }
+
+    archive_name2 = "greek-repository2"
+    archive_path2 = os.path.join(datadir, f"{archive_name2}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path2, archive_name, tmp_path)
+    repo_url += '/greek-tree' # CVS module name
+
+    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+
+    assert loader.load() == {"status": "eventful"}
+
+    visit_status2 = assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT2.id,
+    )
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 10,
+        "directory": 23,
+        "origin": 1,
+        "origin_visit": 2,
+        "release": 0,
+        "revision": 8,
+        "skipped_content": 0,
+        "snapshot": 8,
+    }
+
+    check_snapshot(GREEK_SNAPSHOT2, loader.storage)
+
+    assert visit_status1.date < visit_status2.date
+    assert visit_status1.snapshot != visit_status2.snapshot
