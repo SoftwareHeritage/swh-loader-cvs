@@ -36,9 +36,6 @@ def parse_requirements(*names):
     return requirements
 
 
-# Edit this part to match your module, replace foo by its name
-# Full sample:
-#   https://forge.softwareheritage.org/diffusion/DCORE/browse/master/setup.py
 setup(
     name="swh.loader.cvs",
     description="Software Heritage CVS Loader",
@@ -47,7 +44,7 @@ setup(
     python_requires=">=3.7",
     author="Software Heritage developers",
     author_email="swh-devel@inria.fr",
-    url="https://forge.softwareheritage.org/diffusion/<module-git-code>",
+    url="https://forge.softwareheritage.org/diffusion/swh-loader-cvs",
     packages=find_packages(),  # packages's modules
     install_requires=parse_requirements(None, "swh"),
     tests_require=parse_requirements("test"),
