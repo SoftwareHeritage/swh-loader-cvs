@@ -52,10 +52,11 @@ setup(
     use_scm_version=True,
     extras_require={"testing": parse_requirements("test")},
     include_package_data=True,
-    entry_points="""
-        [swh.cli.subcommands]
-        foo=swh.foo.cli
-    """,
+    # uncomment when ready
+    # entry_points="""
+    #     [swh.workers]
+    #     loader.cvs=swh.loader.cvs
+    # """,
     classifiers=[
         "Programming Language :: Python :: 3",
         "Intended Audience :: Developers",
