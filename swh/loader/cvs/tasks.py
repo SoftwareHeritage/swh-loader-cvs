@@ -27,7 +27,6 @@ def load_cvs(
     destination_path: Optional[str] = None,
     swh_revision: Optional[str] = None,
     visit_date: Optional[str] = None,
-    start_from_scratch: Optional[bool] = False,
 ):
     """Import a CVS repository
 
@@ -41,9 +40,6 @@ def load_cvs(
           start from. See swh.loader.svn.CvsLoader.process
           docstring
         - visit_date: Optional date to override the visit date
-        - start_from_scratch: Flag to allow starting back the svn repository from the
-          start
-
     """
     loader = CvsLoader.from_configfile(
         url=url,
@@ -51,8 +47,5 @@ def load_cvs(
         destination_path=destination_path,
         swh_revision=swh_revision,
         visit_date=convert_to_datetime(visit_date),
-        start_from_scratch=start_from_scratch,
     )
     return loader.load()
-
-
