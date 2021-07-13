@@ -127,7 +127,8 @@ class CvsLoader(BaseLoader):
         self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
         self._last_revision = revision
         if self._load_status == "uneventful":
-            # We have an eventful load if this revision is not already present in the archive
+            # We have an eventful load if this revision is not already
+            # present in the archive
             if not self.storage.revision_get([revision.id])[0]:
                 self._load_status = "eventful"
         return (revision, swh_dir)
@@ -381,16 +382,19 @@ class CvsLoader(BaseLoader):
                     % self.cvsroot_path
                 )
 
-            # Unfortunately, there is no way to convert CVS history in an iterative fashion
-            # because the data is not indexed by any kind of changeset ID. We need to walk
-            # the history of each and every RCS file in the repository during every visit,
-            # even if no new changes will be added to the SWH archive afterwards.
-            # "CVS’s repository is the software equivalent of a telephone book sorted by telephone number."
+            # Unfortunately, there is no way to convert CVS history in an
+            # iterative fashion because the data is not indexed by any kind
+            # of changeset ID. We need to walk the history of each and every
+            # RCS file in the repository during every visit, even if no new
+            # changes will be added to the SWH archive afterwards.
+            # "CVS’s repository is the software equivalent of a telephone book
+            # sorted by telephone number."
             # https://corecursive.com/software-that-doesnt-suck-with-jim-blandy/
             #
-            # An implicit assumption made here is that self.cvs_changesets will fit into
-            # memory in its entirety. If it won't fit then the CVS walker will need to
-            # be modified such that it spools the list of changesets to disk instead.
+            # An implicit assumption made here is that self.cvs_changesets will
+            # fit into memory in its entirety. If it won't fit then the CVS walker
+            # will need to be modified such that it spools the list of changesets
+            # to disk instead.
             cvs = CvsConv(self.cvsroot_path, RcsKeywords(), False, CHANGESET_FUZZ_SEC)
             self.log.info("Walking CVS module %s", self.cvs_module_name)
             cvs.walk(self.cvs_module_name)
