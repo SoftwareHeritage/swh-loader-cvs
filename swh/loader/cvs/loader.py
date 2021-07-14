@@ -357,7 +357,7 @@ class CvsLoader(BaseLoader):
                     filepath = os.path.join(root, f)
                     if f[-2:] == ",v":
                         try:
-                            rcsfile = rcsparse.rcsfile(filepath)
+                            rcsfile = rcsparse.rcsfile(filepath)  # noqa: F841
                         except (Exception):
                             raise
                         else:
