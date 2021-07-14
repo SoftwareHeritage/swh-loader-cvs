@@ -21,7 +21,7 @@ repos:
   - id: mypy
     name: mypy
     entry: mypy
-    args: [swh, '--exclude', '^swh/loader/cvs/(rcsparse|cvs2gitdump)/']
+    args: [swh, '--show-traceback']
     pass_filenames: false
     language: system
     types: [python]
