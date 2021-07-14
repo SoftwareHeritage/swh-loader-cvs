@@ -131,8 +131,10 @@ to improve compatibility with older versions of CVS.
 
 Acknowledgements
 ----------------
-This software contains code derived from *cvs2gitdump* written by YASUOKA Masahiko
+This software contains code derived from *cvs2gitdump* written by YASUOKA Masahiko,
 and from the *rcsparse* library written by Simon Schubert.
+
+This software contains code derived from ViewVC: https://www.viewvc.org/
 
 Licensing information
 ---------------------
@@ -144,6 +146,9 @@ See the top of the file swh/loader/cvs/cvs2gitdump/cvs2gitdump.py
 
 rcsparse by Simon Schubert is licensed under AGPLv3.
 See the file swh/loader/cvs/rcsparse/COPYRIGHT
+
+ViewVC is licensed under the 2-clause BSD licence.
+See the file swh/loader/cvs/rlog.py
 
 # Running Tests
 
