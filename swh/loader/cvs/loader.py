@@ -404,7 +404,7 @@ class CvsLoader(BaseLoader):
                 % (self.cvs_module_name, len(self.cvs_changesets))
             )
             self.swh_revision_gen = self.process_cvs_changesets()
-        elif url.scheme == "pserver" or url.scheme == "fake":
+        elif url.scheme == "pserver" or url.scheme == "fake" or url.scheme == "ssh":
             # remote CVS repository conversion
             self.cvsclient = cvsclient.CVSClient(url)
             cvsroot_path = os.path.dirname(url.path)
