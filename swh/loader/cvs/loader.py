@@ -306,7 +306,7 @@ class CvsLoader(BaseLoader):
                 break
         if not have_module:
             raise NotFound(
-                "CVS module %s not found at %s" % (self.cvs_module_name, host, url)
+                "CVS module %s not found at %s" % (self.cvs_module_name, url)
             )
         if not have_cvsroot:
             raise NotFound("No CVSROOT directory found at %s" % url)
