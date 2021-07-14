@@ -53,11 +53,7 @@ import calendar
 import re
 import time
 
-from swh.loader.cvs.cvs2gitdump.cvs2gitdump import (
-    CHANGESET_FUZZ_SEC,
-    ChangeSetKey,
-    file_path,
-)
+from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey, file_path
 
 # TODO: actual path encoding should be specified as a parameter
 path_encodings = ["ascii", "utf-8"]
