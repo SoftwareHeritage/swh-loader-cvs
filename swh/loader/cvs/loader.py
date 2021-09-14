@@ -134,7 +134,7 @@ class CvsLoader(BaseLoader):
         return (revision, swh_dir)
 
     def swh_hash_data_per_cvs_changeset(self):
-        """Compute swh hash data per CVS changeset.
+        """Compute SWH revision and swh hash data for a CVS changeset.
 
         Yields:
             tuple (rev, swh_directory)
