@@ -120,7 +120,7 @@ class CvsLoader(BaseLoader):
         # Compute SWH revision from the on-disk state
         swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
         if self._last_revision:
-            parents = tuple([bytes(self._last_revision.id)])
+            parents = (self._last_revision.id,)
         else:
             parents = ()
         revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
