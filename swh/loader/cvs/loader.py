@@ -211,10 +211,7 @@ class CvsLoader(BaseLoader):
                         pass
                 else:
                     dirname = os.path.dirname(wtpath)
-                    try:
-                        os.makedirs(dirname)
-                    except FileExistsError:
-                        pass
+                    os.makedirs(dirname, exist_ok=True)
                     self.log.debug("checkout to %s\n" % wtpath)
                     fp = self.cvsclient.checkout(f.path, f.rev, dirname)
                     os.rename(fp.name, wtpath)
