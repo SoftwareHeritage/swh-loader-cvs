@@ -347,7 +347,7 @@ def _parse_log_header(fp):
                     p1, p2, p3, msg = error.groups()
                     filename = p1 or p2 or p3
                     if not filename:
-                        raise vclib.Error(
+                        raise ValueError(
                             "Could not get filename from CVSNT error:\n%s" % line
                         )
                     eof = _EOF_ERROR
