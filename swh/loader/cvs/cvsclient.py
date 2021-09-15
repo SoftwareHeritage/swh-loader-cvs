@@ -20,11 +20,12 @@ CVS_PROTOCOL_BUFFER_SIZE = 8192
 EXAMPLE_PSERVER_URL = "pserver://user:password@cvs.example.com/cvsroot/repository"
 EXAMPLE_SSH_URL = "ssh://user@cvs.example.com/cvsroot/repository"
 
-VALID_RESPONSES = [ "ok",  "error", "Valid-requests", "Checked-in",
-    "New-entry", "Checksum", "Copy-file", "Updated", "Created",
-    "Update-existing", "Merged", "Patched", "Rcs-diff", "Mode",
-    "Removed", "Remove-entry", "Template", "Notified", "Module-expansion",
-    "Wrapper-rcsOption", "M", "Mbinary", "E", "F", "MT" ]
+VALID_RESPONSES = ["ok", "error", "Valid-requests", "Checked-in",
+                   "New-entry", "Checksum", "Copy-file", "Updated", "Created",
+                   "Update-existing", "Merged", "Patched", "Rcs-diff", "Mode",
+                   "Removed", "Remove-entry", "Template", "Notified",
+                   "Module-expansion", "Wrapper-rcsOption", "M", "Mbinary",
+                   "E", "F", "MT"]
 
 # Trivially encode strings to protect them from innocent eyes (i.e.,
 # inadvertent password compromises, like a network administrator
@@ -32,25 +33,27 @@ VALID_RESPONSES = [ "ok",  "error", "Valid-requests", "Checked-in",
 # the password protocol go by).
 #
 # This is NOT secure encryption.
+
+
 def scramble_password(password):
-    s = ['A'] # scramble scheme version number
+    s = ['A']  # scramble scheme version number
     scramble_shifts = [
-        0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
-       16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
-      114,120, 53, 79, 96,109, 72,108, 70, 64, 76, 67,116, 74, 68, 87,
-      111, 52, 75,119, 49, 34, 82, 81, 95, 65,112, 86,118,110,122,105,
-       41, 57, 83, 43, 46,102, 40, 89, 38,103, 45, 50, 42,123, 91, 35,
-      125, 55, 54, 66,124,126, 59, 47, 92, 71,115, 78, 88,107,106, 56,
-       36,121,117,104,101,100, 69, 73, 99, 63, 94, 93, 39, 37, 61, 48,
-       58,113, 32, 90, 44, 98, 60, 51, 33, 97, 62, 77, 84, 80, 85,223,
-      225,216,187,166,229,189,222,188,141,249,148,200,184,136,248,190,
-      199,170,181,204,138,232,218,183,255,234,220,247,213,203,226,193,
-      174,172,228,252,217,201,131,230,197,211,145,238,161,179,160,212,
-      207,221,254,173,202,146,224,151,140,196,205,130,135,133,143,246,
-      192,159,244,239,185,168,215,144,139,165,180,157,147,186,214,176,
-      227,231,219,169,175,156,206,198,129,164,150,210,154,177,134,127,
-      182,128,158,208,162,132,167,209,149,241,153,251,237,236,171,195,
-      243,233,253,240,194,250,191,155,142,137,245,235,163,242,178,152 ]
+        0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  # noqa: E241
+       16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,  # noqa: E241,E131,E501
+      114,120, 53, 79, 96,109, 72,108, 70, 64, 76, 67,116, 74, 68, 87,  # noqa: E241,E131,E501
+      111, 52, 75,119, 49, 34, 82, 81, 95, 65,112, 86,118,110,122,105,  # noqa: E241,E131,E501
+       41, 57, 83, 43, 46,102, 40, 89, 38,103, 45, 50, 42,123, 91, 35,  # noqa: E241,E131,E501
+      125, 55, 54, 66,124,126, 59, 47, 92, 71,115, 78, 88,107,106, 56,  # noqa: E241,E131,E501
+       36,121,117,104,101,100, 69, 73, 99, 63, 94, 93, 39, 37, 61, 48,  # noqa: E241,E131,E501
+       58,113, 32, 90, 44, 98, 60, 51, 33, 97, 62, 77, 84, 80, 85,223,  # noqa: E241,E131,E501
+      225,216,187,166,229,189,222,188,141,249,148,200,184,136,248,190,  # noqa: E241,E131,E501
+      199,170,181,204,138,232,218,183,255,234,220,247,213,203,226,193,  # noqa: E241,E131,E501
+      174,172,228,252,217,201,131,230,197,211,145,238,161,179,160,212,  # noqa: E241,E131,E501
+      207,221,254,173,202,146,224,151,140,196,205,130,135,133,143,246,  # noqa: E241,E131,E501
+      192,159,244,239,185,168,215,144,139,165,180,157,147,186,214,176,  # noqa: E241,E131,E501
+      227,231,219,169,175,156,206,198,129,164,150,210,154,177,134,127,  # noqa: E241,E131,E501
+      182,128,158,208,162,132,167,209,149,241,153,251,237,236,171,195,  # noqa: E241,E131,E501
+      243,233,253,240,194,250,191,155,142,137,245,235,163,242,178,152]  # noqa: E241,E131,E501
     for c in password:
         s.append('%c' % scramble_shifts[ord(c)])
     return "".join(s)
@@ -59,23 +62,27 @@ def scramble_password(password):
 class CVSProtocolError(Exception):
     pass
 
+
 _re_kb_opt = re.compile(b'\/-kb\/')
+
 
 class CVSClient:
 
     def connect_pserver(self, hostname, port, auth):
-        if port == None:
+        if port is None:
             port = CVS_PSERVER_PORT
-        if auth == None:
-            raise NotFound("Username and password are required for a pserver connection: %s" % EXAMPLE_PSERVER_URL)
+        if auth is None:
+            raise NotFound("Username and password are required for "
+                           "a pserver connection: %s" % EXAMPLE_PSERVER_URL)
         try:
-          user = auth.split(':')[0]
-          password = auth.split(':')[1]
+            user = auth.split(':')[0]
+            password = auth.split(':')[1]
         except IndexError:
-            raise NotFound("Username and password are required for a pserver connection: %s" % EXAMPLE_PSERVER_URL)
+            raise NotFound("Username and password are required for "
+                           "a pserver connection: %s" % EXAMPLE_PSERVER_URL)
 
         try:
-          self.socket = socket.create_connection((hostname, port))
+            self.socket = socket.create_connection((hostname, port))
         except ConnectionRefusedError:
             raise NotFound("Could not connect to %s:%s", hostname, port)
 
@@ -89,34 +96,37 @@ class CVSClient:
             raise NotFound("pserver authentication failed for %s:%s" % (hostname, port))
 
     def connect_ssh(self, hostname, port, auth):
-        command = [ 'ssh' ]
-        if auth != None:
+        command = ['ssh']
+        if auth is not None:
             # Assume 'auth' contains only a user name.
             # We do not support password authentication with SSH since the
             # anoncvs user is usually granted access without a password.
-            command += [ '-l' , '%s' % auth ]
-        if port != None:
-            command += [ '-p' , '%d' % port ]
+            command += ['-l' , '%s' % auth]
+        if port is not None:
+            command += ['-p' , '%d' % port]
 
-        # accept new SSH hosts keys upon first use; changed host keys will require intervention
-        command += ['-o', "StrictHostKeyChecking=accept-new" ]
+        # accept new SSH hosts keys upon first use; changed host keys
+        # will require intervention
+        command += ['-o', "StrictHostKeyChecking=accept-new"]
 
         # disable interactive prompting
-        command += ['-o', "BatchMode=yes" ]
+        command += ['-o', "BatchMode=yes"]
 
         # disable further option processing by adding '--'
-        command += [ '--' ]
+        command += ['--']
 
         command += ['%s' % hostname, 'cvs', 'server']
+        # use non-buffered I/O to match behaviour of self.socket
         self.ssh = subprocess.Popen(command,
-            bufsize=0, # use non-buffered I/O to match behaviour of self.socket
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                                    bufsize=0,
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
     def connect_fake(self, hostname, port, auth):
-        command = [ 'cvs', 'server'  ]
+        command = ['cvs', 'server']
+        # use non-buffered I/O to match behaviour of self.socket
         self.ssh = subprocess.Popen(command,
-            bufsize=0, # use non-buffered I/O to match behaviour of self.socket
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                                    bufsize=0,
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
     def conn_read_line(self, require_newline=True):
         if len(self.linebuffer) != 0:
@@ -126,7 +136,8 @@ class CVSClient:
         while idx == -1:
             if len(buf) >= CVS_PROTOCOL_BUFFER_SIZE:
                 if require_newline:
-                    raise CVSProtocolError("Overlong response from CVS server: %s" % buf)
+                    raise CVSProtocolError("Overlong response from "
+                                           "CVS server: %s" % buf)
                 else:
                     break
             if self.socket:
@@ -170,9 +181,9 @@ class CVSClient:
         if self.ssh:
             self.ssh.kill()
             try:
-              self.ssh.wait(timeout=10)
+                self.ssh.wait(timeout=10)
             except TimeoutExpired as e:
-              raise TimeoutExpired("Could not terminate ssh program: %s" % e)
+                raise TimeoutExpired("Could not terminate ssh program: %s" % e)
 
     def __init__(self, url):
         """
@@ -199,14 +210,16 @@ class CVSClient:
         # we should have a connection now
         assert self.socket or self.ssh
 
-        self.conn_write_str("Root %s\nValid-responses %s\nvalid-requests\nUseUnchanged\n" % \
-            (self.cvsroot_path, ' '.join(VALID_RESPONSES)))
+        self.conn_write_str("Root %s\nValid-responses %s\nvalid-requests\n"
+                            "UseUnchanged\n" %
+                            (self.cvsroot_path, ' '.join(VALID_RESPONSES)))
         response = self.conn_read_line()
         if not response:
             raise CVSProtocolError("No response from CVS server")
         try:
             if response[0:15] != b"Valid-requests ":
-                raise CVSProtocolError("Invalid response from CVS server: %s" % response)
+                raise CVSProtocolError("Invalid response from "
+                                       "CVS server: %s" % response)
         except IndexError:
             raise CVSProtocolError("Invalid response from CVS server: %s" % response)
         response = self.conn_read_line()
@@ -242,14 +255,13 @@ class CVSClient:
         rlog_output.seek(0)
         return rlog_output
 
-
     def fetch_rlog(self):
         fp = tempfile.TemporaryFile()
-        self.conn_write_str("Global_option -q\nArgument --\nArgument %s\nrlog\n" % \
-            self.cvs_module_name)
+        self.conn_write_str("Global_option -q\nArgument --\nArgument %s\nrlog\n" %
+                            self.cvs_module_name)
         while True:
             response = self.conn_read_line()
-            if response == None:
+            if response is None:
                 raise CVSProtocolError("No response from CVS server")
             if response[0:2] == b"E ":
                 raise CVSProtocolError("Error response from CVS server: %s" % response)
@@ -270,23 +282,25 @@ class CVSClient:
             self.conn_write_str("Directory %s\n%s\n" % (dirname, dirname))
         filename = os.path.basename(path)
         co_output = tempfile.NamedTemporaryFile(dir=dest_dir, delete=True,
-            prefix='cvsclient-checkout-%s-r%s-' % (filename, rev))
+                                                prefix='cvsclient-checkout-%s-r%s-' %
+                                                (filename, rev))
         # TODO: cvs <= 1.10 servers expect to be given every Directory along the path.
         self.conn_write_str("Directory %s\n%s\n"
-            "Global_option -q\n"
-            "Argument -r%s\n"
-            "Argument -kb\n"
-            "Argument --\nArgument %s\nco \n" % (self.cvs_module_name,
-            self.cvs_module_name, rev, path))
+                            "Global_option -q\n"
+                            "Argument -r%s\n"
+                            "Argument -kb\n"
+                            "Argument --\nArgument %s\nco \n" %
+                            (self.cvs_module_name, self.cvs_module_name, rev, path))
         while True:
             if have_bytecount and bytecount > 0:
                 response = self.conn_read_line(require_newline=False)
-                if response == None:
+                if response is None:
                     raise CVSProtocolError("Incomplete response from CVS server")
                 co_output.write(response)
                 bytecount -= len(response)
                 if bytecount < 0:
-                    raise CVSProtocolError("Overlong response from CVS server: %s" % response)
+                    raise CVSProtocolError("Overlong response from "
+                                           "CVS server: %s" % response)
                 continue
             else:
                 response = self.conn_read_line()
@@ -299,7 +313,7 @@ class CVSClient:
                 continue
             elif expect_bytecount:
                 try:
-                    bytecount = int(response[0:-1]) # strip trailing \n
+                    bytecount = int(response[0:-1])  # strip trailing \n
                 except ValueError:
                     raise CVSProtocolError('Bad CVS protocol response: %s' % response)
                 have_bytecount = True
