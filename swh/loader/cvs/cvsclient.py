@@ -249,7 +249,7 @@ class CVSClient:
             elif line[0:10] == b'MT newline':
                 rlog_output.write(line[10:])
             elif line[0:7] == b'error  ':
-                epxect_error = True
+                expect_error = True
                 continue
             else:
                 raise CVSProtocolError('Bad CVS protocol response: %s' % line)
