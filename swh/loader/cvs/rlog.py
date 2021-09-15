@@ -358,7 +358,7 @@ def _parse_log_header(fp):
                     filename, msg = error.groups()
                     if msg[:30] == b"warning: Unknown phrases like ":
                         # don't worry about this warning. it can happen with some RCS
-                        # files that have unknown fields in them (e.g. "permissions 644;"
+                        # files that have unknown fields in them e.g. "permissions 644;"
                         continue
                     eof = _EOF_ERROR
                     break
@@ -451,7 +451,8 @@ def _parse_log_entry(fp):
             raise ValueError("invalid year")
     date = calendar.timegm(tm)
 
-    # return a revision tuple compatible with 'rcsparse', the log message, and the EOF marker
+    # return a revision tuple compatible with 'rcsparse', the log message,
+    # and the EOF marker
     return (
         (
             rev.decode("ascii"),  # revision number string
