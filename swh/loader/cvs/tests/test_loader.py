@@ -5,7 +5,6 @@
 
 import os
 
-import pytest
 from swh.loader.cvs.loader import CvsLoader
 from swh.loader.tests import (
     assert_last_visit_matches,
@@ -26,6 +25,7 @@ RUNBABY_SNAPSHOT = Snapshot(
     },
 )
 
+
 def test_loader_cvs_not_found_no_mock(swh_storage, tmp_path):
     """Given an unknown repository, the loader visit ends up in status not_found"""
     unknown_repo_url = "unknown-repository"
@@ -44,7 +44,9 @@ def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
 
-    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
 
     assert loader.load() == {"status": "eventful"}
 
@@ -70,6 +72,7 @@ def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
 
     check_snapshot(RUNBABY_SNAPSHOT, loader.storage)
 
+
 def test_loader_cvs_2_visits_no_change(swh_storage, datadir, tmp_path):
     """Eventful visit followed by uneventful visit should yield the same snapshot
 
@@ -78,7 +81,9 @@ def test_loader_cvs_2_visits_no_change(swh_storage, datadir, tmp_path):
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
 
-    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
 
     assert loader.load() == {"status": "eventful"}
     visit_status1 = assert_last_visit_matches(
@@ -105,6 +110,7 @@ def test_loader_cvs_2_visits_no_change(swh_storage, datadir, tmp_path):
     assert stats["origin_visit"] == 1 + 1  # computed twice the same snapshot
     assert stats["snapshot"] == 1
 
+
 GREEK_SNAPSHOT = Snapshot(
     id=hash_to_bytes("5e74af67d69dfd7aea0eb118154d062f71f50120"),
     branches={
@@ -115,22 +121,21 @@ GREEK_SNAPSHOT = Snapshot(
     },
 )
 
+
 def test_loader_cvs_with_file_additions_and_deletions(swh_storage, datadir, tmp_path):
     """Eventful conversion of history with file additions and deletions"""
     archive_name = "greek-repository"
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
-    repo_url += '/greek-tree' # CVS module name
-    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+    repo_url += "/greek-tree"  # CVS module name
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
 
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage,
-        repo_url,
-        status="full",
-        type="cvs",
-        snapshot=GREEK_SNAPSHOT.id,
+        loader.storage, repo_url, status="full", type="cvs", snapshot=GREEK_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -146,6 +151,7 @@ def test_loader_cvs_with_file_additions_and_deletions(swh_storage, datadir, tmp_
     }
 
     check_snapshot(GREEK_SNAPSHOT, loader.storage)
+
 
 GREEK_SNAPSHOT2 = Snapshot(
     id=hash_to_bytes("048885ae2145ffe81588aea95dcf75c536ecdf26"),
@@ -163,17 +169,15 @@ def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
     archive_name = "greek-repository"
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
-    repo_url += '/greek-tree' # CVS module name
-    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+    repo_url += "/greek-tree"  # CVS module name
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
 
     assert loader.load() == {"status": "eventful"}
 
     visit_status1 = assert_last_visit_matches(
-        loader.storage,
-        repo_url,
-        status="full",
-        type="cvs",
-        snapshot=GREEK_SNAPSHOT.id,
+        loader.storage, repo_url, status="full", type="cvs", snapshot=GREEK_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -191,9 +195,11 @@ def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
     archive_name2 = "greek-repository2"
     archive_path2 = os.path.join(datadir, f"{archive_name2}.tgz")
     repo_url = prepare_repository_from_archive(archive_path2, archive_name, tmp_path)
-    repo_url += '/greek-tree' # CVS module name
+    repo_url += "/greek-tree"  # CVS module name
 
-    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
 
     assert loader.load() == {"status": "eventful"}
 
@@ -222,17 +228,20 @@ def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
     assert visit_status1.date < visit_status2.date
     assert visit_status1.snapshot != visit_status2.snapshot
 
+
 def test_loader_cvs_visit_pserver(swh_storage, datadir, tmp_path):
     """Eventful visit to CVS pserver should yield 1 snapshot"""
     archive_name = "runbaby"
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
-    repo_url += '/runbaby' # CVS module name
+    repo_url += "/runbaby"  # CVS module name
 
     # Ask our cvsclient to connect via the 'cvs server' command
-    repo_url = 'fake://' + repo_url[7:]
+    repo_url = "fake://" + repo_url[7:]
 
-    loader = CvsLoader(swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name))
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
 
     assert loader.load() == {"status": "eventful"}
 
