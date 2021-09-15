@@ -223,6 +223,7 @@ class CvsLoader(BaseLoader):
                     dirname = os.path.dirname(wtpath)
                     os.makedirs(dirname, exist_ok=True)
                     self.log.debug("checkout to %s\n" % wtpath)
+                    assert self.cvsclient  # avoid None type error from mypy
                     fp = self.cvsclient.checkout(f.path, f.rev, dirname)
                     os.rename(fp.name, wtpath)
                     try:
