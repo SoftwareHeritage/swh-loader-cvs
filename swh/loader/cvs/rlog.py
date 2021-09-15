@@ -226,7 +226,7 @@ class RlogConv:
                     logmsgs[rev[0]] = logmsg
             if eof != _EOF_LOG and eof != _EOF_ERROR:
                 path = file_path(self.cvsroot_path, fname)
-                if not path in self.offsets.keys():
+                if path not in self.offsets.keys():
                     self.offsets[path] = dict()
                 if rev:
                     self.offsets[path][rev[0]] = off
