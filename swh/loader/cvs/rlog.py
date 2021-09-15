@@ -70,14 +70,58 @@ class RlogConv:
     def _process_rlog_entry(self, path, taginfo, revisions, logmsgs):
         """ Convert an rlog entry into an item in self.changesets """
         rtags = dict()
+        # RCS and CVS represent branches by adding digits to revision numbers.
+        # And CVS assigns special meaning to certain revision number ranges.
+        #
+        # Revision numbers on the main branch have only two digits:
+        #
+        #  1.1, 1.2, 1.3, ...
+        #
+        # Branches created with 'cvs tag -b' use even numbers for
+        # the third digit:
+        #
+        #  1.1, 1.2, 1.3, ...  main branch history of the file
+        #    |
+        #    1.1.2.1, 1.1.2.2 ... a branch (2) forked off r1.1 of the file
+        #
+        # Branches are given human-readable names by associating
+        # RCS tag labels with their revision numbers.
+        # Given a file on the above branch which has been changed 10 times
+        # since history was forked, the branch tag would look like this:
+        #
+        #   MY_BRANCH: r1.1.2.10
+        #
+        # Odd branch numbers are reserved for CVS "vendor" branches.
+        # The default vendor branch is 1.1.1.
+        # Vendor branches are populated with 'cvs import'.
+        # Files on the vendor branch are merged to the main branch automatically
+        # unless there are merge conflicts. Such conflicts have to be resolved
+        # manually each time 'cvs import' is used to update the vendor branch.
+        #
+        # See here for details:
+        # https://www.gnu.org/software/trans-coord/manual/cvs/html_node/Branches-and-revisions.html#Branches-and-revisions
+        #
+        # There are also "magic" branch numbers with a zero inserted
+        # at the second-rightmost position:
+        #
+        #  1.1, 1.2, 1.3, ...  main branch history of the file
+        #    |
+        #    1.1.2.0.1 magic branch (2)
+        #
+        # This allows CVS to store information about a branch's existence
+        # before any files on this branch have been modified.
+        # Even-numbered branch revisions appear once the file is modified.
         branches = {"1": "HEAD", "1.1.1": "VENDOR"}
         for k, v in list(taginfo.items()):
             r = v.split(".")
             if len(r) == 3:
+                # vendor branch number
                 branches[v] = "VENDOR"
             elif len(r) >= 3 and r[-2] == "0":
+                # magic branch number
                 branches[".".join(r[:-2] + r[-1:])] = k
             if len(r) == 2 and branches[r[0]] == "HEAD":
+                # main branch number
                 if v not in rtags:
                     rtags[v] = list()
                 rtags[v].append(k)
