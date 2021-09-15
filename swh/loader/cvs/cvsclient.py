@@ -182,8 +182,9 @@ class CVSClient:
             self.ssh.kill()
             try:
                 self.ssh.wait(timeout=10)
-            except TimeoutExpired as e:
-                raise TimeoutExpired("Could not terminate ssh program: %s" % e)
+            except subprocess.TimeoutExpired as e:
+                raise subprocess.TimeoutExpired("Could not terminate "
+                                                "ssh program: %s" % e)
 
     def __init__(self, url):
         """
