@@ -55,7 +55,19 @@ import time
 
 from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey, file_path
 
-# TODO: actual path encoding should be specified as a parameter
+# There is no known encoding of path names in CVS. The actual encoding used
+# will depend on the CVS server's operating system and perhaps even the
+# underlying filesystem used to host a CVS repository.
+# It is even conceivable that a given repository may use multiple encodings,
+# e.g. due to migrations of the repository between different servers over time.
+#
+# This issue also affects the CVS network protocol which is communicating
+# paths between the CVS server and the CVS client. For this reason, most
+# public-facing repositories should stick to ASCII in practice.
+#
+# TODO: If known, the actual path encoding used by the repository should
+# be specified as a parameter. This parameter should be a list since
+# multiple encodings may be present in a given repository.
 path_encodings = ["ascii", "utf-8"]
 
 
@@ -195,6 +207,10 @@ class RlogConv:
             revisions = {}
             logmsgs = {}
             if filename:
+                # There is no known encoding of filenames in CVS.
+                # Attempt to decode the path with our list of known encodings.
+                # If none of them work, forcefully decode the path assuming
+                # the final path encoding provided in the list.
                 for i, e in enumerate(path_encodings):
                     try:
                         how = "ignore" if i == len(path_encodings) - 1 else "strict"
