@@ -83,13 +83,6 @@ class CvsLoader(BaseLoader):
 
         self.cvs_module_name = None
 
-        # XXX At present changeset IDs are recomputed on the fly during every visit.
-        # If we were able to maintain a cached somewhere which can be indexed by a
-        # cvs2gitdump.ChangeSetKey and yields an SWH revision hash we could avoid
-        # doing a lot of redundant work during every visit.
-
-        self.cvs_changesets = None
-
         # remote CVS repository access (history is parsed from CVS rlog):
         self.cvsclient = None
         self.rlog_file = None
@@ -133,16 +126,21 @@ class CvsLoader(BaseLoader):
                 self._load_status = "eventful"
         return (revision, swh_dir)
 
-    def swh_hash_data_per_cvs_changeset(self):
-        """Compute SWH revision and swh hash data for a CVS changeset.
+    def process_cvs_changesets(
+        self, cvs_changesets,
+    ) -> Iterator[
+        Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
+    ]:
+        """Process CVS revisions.
+
+        At each CVS revision, check out contents and compute swh hashes.
 
         Yields:
-            tuple (rev, swh_directory)
-            - rev: current SWH revision computed from checked out work tree
-            - swh_directory: dictionary of path, swh hash data with type
+            tuple (contents, skipped-contents, directories, revision) of dict as a
+            dictionary with keys, sha1_git, sha1, etc...
 
         """
-        for k in self.cvs_changesets:
+        for k in cvs_changesets:
             tstr = time.strftime("%c", time.gmtime(k.max_time))
             self.log.info(
                 "changeset from %s by %s on branch %s", tstr, k.author, k.branch
@@ -177,19 +175,31 @@ class CvsLoader(BaseLoader):
                     outfile.write(contents)
                     outfile.close()
 
-            (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
-            yield revision, swh_dir
+            (_revision, swh_dir) = self.compute_swh_revision(k, logmsg)
+            (_contents, _skipped_contents, _directories) = from_disk.iter_directory(
+                swh_dir
+            )
+            yield _contents, _skipped_contents, _directories, _revision
 
-    def swh_hash_data_per_cvs_rlog_changeset(self):
-        """Compute swh hash data per CVS rlog changeset.
+    def process_cvs_rlog_changesets(
+        self, cvs_changesets,
+    ) -> Iterator[
+        Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
+    ]:
+        """Process CVS rlog revisions.
+
+        At each CVS revision, check out contents and compute swh hashes.
 
         Yields:
-            tuple (rev, swh_directory)
-            - rev: current SWH revision computed from checked out work tree
-            - swh_directory: dictionary of path, swh hash data with type
+            tuple (contents, skipped-contents, directories, revision) of dict as a
+            dictionary with keys, sha1_git, sha1, etc...
 
         """
-        for k in self.cvs_changesets:
+        # XXX At present changeset IDs are recomputed on the fly during every visit.
+        # If we were able to maintain a cached somewhere which can be indexed by a
+        # cvs2gitdump.ChangeSetKey and yields an SWH revision hash we could avoid
+        # doing a lot of redundant work during every visit.
+        for k in cvs_changesets:
             tstr = time.strftime("%c", time.gmtime(k.max_time))
             self.log.info(
                 "changeset from %s by %s on branch %s", tstr, k.author, k.branch
@@ -222,50 +232,11 @@ class CvsLoader(BaseLoader):
                         pass
 
             # TODO: prune empty directories?
-            (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
-            yield revision, swh_dir
-
-    def process_cvs_changesets(
-        self,
-    ) -> Iterator[
-        Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
-    ]:
-        """Process CVS revisions.
-
-        At each CVS revision, check out contents and compute swh hashes.
-
-        Yields:
-            tuple (contents, skipped-contents, directories, revision) of dict as a
-            dictionary with keys, sha1_git, sha1, etc...
-
-        """
-        for swh_revision, swh_dir in self.swh_hash_data_per_cvs_changeset():
-            # Send the associated contents/directories
+            (_revision, swh_dir) = self.compute_swh_revision(k, logmsg)
             (_contents, _skipped_contents, _directories) = from_disk.iter_directory(
                 swh_dir
             )
-            yield _contents, _skipped_contents, _directories, swh_revision
-
-    def process_cvs_rlog_changesets(
-        self,
-    ) -> Iterator[
-        Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
-    ]:
-        """Process CVS rlog revisions.
-
-        At each CVS revision, check out contents and compute swh hashes.
-
-        Yields:
-            tuple (contents, skipped-contents, directories, revision) of dict as a
-            dictionary with keys, sha1_git, sha1, etc...
-
-        """
-        for swh_revision, swh_dir in self.swh_hash_data_per_cvs_rlog_changeset():
-            # Send the associated contents/directories
-            (_contents, _skipped_contents, _directories) = from_disk.iter_directory(
-                swh_dir
-            )
-            yield _contents, _skipped_contents, _directories, swh_revision
+            yield _contents, _skipped_contents, _directories, _revision
 
     def prepare_origin_visit(self):
         self.origin = Origin(
@@ -395,12 +366,12 @@ class CvsLoader(BaseLoader):
             cvs = CvsConv(self.cvsroot_path, RcsKeywords(), False, CHANGESET_FUZZ_SEC)
             self.log.info("Walking CVS module %s", self.cvs_module_name)
             cvs.walk(self.cvs_module_name)
-            self.cvs_changesets = sorted(cvs.changesets)
+            cvs_changesets = sorted(cvs.changesets)
             self.log.info(
                 "CVS changesets found in %s: %d"
-                % (self.cvs_module_name, len(self.cvs_changesets))
+                % (self.cvs_module_name, len(cvs_changesets))
             )
-            self.swh_revision_gen = self.process_cvs_changesets()
+            self.swh_revision_gen = self.process_cvs_changesets(cvs_changesets)
         elif url.scheme == "pserver" or url.scheme == "fake" or url.scheme == "ssh":
             # remote CVS repository conversion
             self.cvsclient = cvsclient.CVSClient(url)
@@ -414,12 +385,12 @@ class CvsLoader(BaseLoader):
             self.rlog = RlogConv(cvsroot_path, CHANGESET_FUZZ_SEC)
             self.rlog_file = self.cvsclient.fetch_rlog()
             self.rlog.parse_rlog(self.rlog_file)
-            self.cvs_changesets = sorted(self.rlog.changesets)
+            cvs_changesets = sorted(self.rlog.changesets)
             self.log.info(
                 "CVS changesets found for %s: %d"
-                % (self.cvs_module_name, len(self.cvs_changesets))
+                % (self.cvs_module_name, len(cvs_changesets))
             )
-            self.swh_revision_gen = self.process_cvs_rlog_changesets()
+            self.swh_revision_gen = self.process_cvs_rlog_changesets(cvs_changesets)
         else:
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
 

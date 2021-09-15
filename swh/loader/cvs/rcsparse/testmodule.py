@@ -1,4 +1,4 @@
-import rcsparse
+import swh.loader.cvs.rcsparse
 
 f=rcsparse.rcsfile('test,v')
 print f.head
