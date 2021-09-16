@@ -1,5 +1,6 @@
 [tool.black]
 target-version = ['py37']
+exclude = '^/swh/loader/cvs/(rcsparse|cvs2gitdump)/.*'
 
 [tool.isort]
 multi_line_output = 3
