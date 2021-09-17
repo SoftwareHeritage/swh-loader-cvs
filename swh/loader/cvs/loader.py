@@ -175,11 +175,11 @@ class CvsLoader(BaseLoader):
                     outfile.write(contents)
                     outfile.close()
 
-            (_revision, swh_dir) = self.compute_swh_revision(k, logmsg)
-            (_contents, _skipped_contents, _directories) = from_disk.iter_directory(
+            (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
+            (contents, skipped_contents, directories) = from_disk.iter_directory(
                 swh_dir
             )
-            yield _contents, _skipped_contents, _directories, _revision
+            yield contents, skipped_contents, directories, revision
 
     def process_cvs_rlog_changesets(
         self, cvs_changesets,
@@ -233,11 +233,11 @@ class CvsLoader(BaseLoader):
                         pass
 
             # TODO: prune empty directories?
-            (_revision, swh_dir) = self.compute_swh_revision(k, logmsg)
-            (_contents, _skipped_contents, _directories) = from_disk.iter_directory(
+            (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
+            (contents, skipped_contents, directories) = from_disk.iter_directory(
                 swh_dir
             )
-            yield _contents, _skipped_contents, _directories, _revision
+            yield contents, skipped_contents, directories, revision
 
     def prepare_origin_visit(self):
         self.origin = Origin(
