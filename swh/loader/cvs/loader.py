@@ -165,11 +165,8 @@ class CvsLoader(BaseLoader):
                         rcsfile = rcsparse.rcsfile(f.path)
                     rcs = RcsKeywords()
                     contents = rcs.expand_keyword(f.path, rcsfile, f.rev)
-                    try:
-                        outfile = open(wtpath, mode="wb")
-                    except FileNotFoundError:
-                        os.makedirs(os.path.dirname(wtpath))
-                        outfile = open(wtpath, mode="wb")
+                    os.makedirs(os.path.dirname(wtpath), exist_ok=True)
+                    outfile = open(wtpath, mode="wb")
                     outfile.write(contents)
                     outfile.close()
 
@@ -324,18 +321,14 @@ class CvsLoader(BaseLoader):
                 for f in files:
                     filepath = os.path.join(root, f)
                     if f[-2:] == ",v":
-                        try:
-                            rcsfile = rcsparse.rcsfile(filepath)  # noqa: F841
-                        except (Exception):
-                            raise
-                        else:
-                            self.log.debug(
-                                "Looks like we have data to convert; "
-                                "found a valid RCS file at %s",
-                                filepath,
-                            )
-                            have_rcsfile = True
-                            break
+                        rcsfile = rcsparse.rcsfile(filepath)  # noqa: F841
+                        self.log.debug(
+                            "Looks like we have data to convert; "
+                            "found a valid RCS file at %s",
+                            filepath,
+                        )
+                        have_rcsfile = True
+                        break
                 if have_rcsfile:
                     break
 
