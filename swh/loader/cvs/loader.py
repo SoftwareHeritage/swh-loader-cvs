@@ -120,7 +120,7 @@ class CvsLoader(BaseLoader):
         else:
             parents = ()
         revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
-        self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
+        self.log.debug("SWH revision ID: %s", hashutil.hash_to_hex(revision.id))
         self._last_revision = revision
         return (revision, swh_dir)
 
@@ -149,7 +149,7 @@ class CvsLoader(BaseLoader):
                 rcsfile = None
                 path = file_path(self.cvsroot_path, f.path)
                 wtpath = os.path.join(self.worktree_path, path)
-                self.log.info("rev %s of file %s" % (f.rev, f.path))
+                self.log.info("rev %s of file %s", f.rev, f.path)
                 if not logmsg:
                     rcsfile = rcsparse.rcsfile(f.path)
                     logmsg = rcsfile.getlog(k.revs[0].rev)
@@ -207,10 +207,10 @@ class CvsLoader(BaseLoader):
             for f in k.revs:
                 path = file_path(self.cvsroot_path, f.path)
                 wtpath = os.path.join(self.worktree_path, path)
-                self.log.info("rev %s of file %s" % (f.rev, f.path))
+                self.log.info("rev %s of file %s", f.rev, f.path)
                 if not logmsg:
                     logmsg = self.rlog.getlog(self.rlog_file, f.path, k.revs[0].rev)
-                self.log.debug("f.state is %s\n" % f.state)
+                self.log.debug("f.state is %s", f.state)
                 if f.state == "dead":
                     # remove this file from work tree
                     try:
@@ -220,7 +220,7 @@ class CvsLoader(BaseLoader):
                 else:
                     dirname = os.path.dirname(wtpath)
                     os.makedirs(dirname, exist_ok=True)
-                    self.log.debug("checkout to %s\n" % wtpath)
+                    self.log.debug("checkout to %s", wtpath)
                     assert self.cvsclient  # avoid None type error from mypy
                     fp = self.cvsclient.checkout(f.path, f.rev, dirname)
                     os.rename(fp.name, wtpath)
@@ -264,7 +264,7 @@ class CvsLoader(BaseLoader):
         have_cvsroot = False
         have_module = False
         for line in rsync.stdout.split("\n"):
-            self.log.debug("rsync server: %s" % line)
+            self.log.debug("rsync server: %s", line)
             if line.endswith(" CVSROOT"):
                 have_cvsroot = True
             elif line.endswith(" %s" % self.cvs_module_name):
@@ -297,8 +297,10 @@ class CvsLoader(BaseLoader):
         )
         url = parse_url(self.origin_url)
         self.log.debug(
-            "prepare; origin_url=%s scheme=%s path=%s"
-            % (self.origin_url, url.scheme, url.path)
+            "prepare; origin_url=%s scheme=%s path=%s",
+            self.origin_url,
+            url.scheme,
+            url.path,
         )
         if not url.path:
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
@@ -329,7 +331,8 @@ class CvsLoader(BaseLoader):
                         else:
                             self.log.debug(
                                 "Looks like we have data to convert; "
-                                "found a valid RCS file at %s" % filepath
+                                "found a valid RCS file at %s",
+                                filepath,
                             )
                             have_rcsfile = True
                             break
@@ -338,14 +341,14 @@ class CvsLoader(BaseLoader):
 
             if not have_rcsfile:
                 raise NotFound(
-                    "Directory %s does not contain any valid RCS files %s"
-                    % self.cvsroot_path
+                    "Directory %s does not contain any valid RCS files %s",
+                    self.cvsroot_path,
                 )
             if not have_cvsroot:
                 self.log.warn(
                     "The CVS repository at '%s' lacks a CVSROOT directory; "
-                    "we might be ingesting an incomplete copy of the repository"
-                    % self.cvsroot_path
+                    "we might be ingesting an incomplete copy of the repository",
+                    self.cvsroot_path,
                 )
 
             # Unfortunately, there is no way to convert CVS history in an
@@ -366,8 +369,9 @@ class CvsLoader(BaseLoader):
             cvs.walk(self.cvs_module_name)
             cvs_changesets = sorted(cvs.changesets)
             self.log.info(
-                "CVS changesets found in %s: %d"
-                % (self.cvs_module_name, len(cvs_changesets))
+                "CVS changesets found in %s: %d",
+                self.cvs_module_name,
+                len(cvs_changesets),
             )
             self.swh_revision_gen = self.process_cvs_changesets(cvs_changesets)
         elif url.scheme == "pserver" or url.scheme == "fake" or url.scheme == "ssh":
@@ -385,8 +389,9 @@ class CvsLoader(BaseLoader):
             self.rlog.parse_rlog(self.rlog_file)
             cvs_changesets = sorted(self.rlog.changesets)
             self.log.info(
-                "CVS changesets found for %s: %d"
-                % (self.cvs_module_name, len(cvs_changesets))
+                "CVS changesets found for %s: %d",
+                self.cvs_module_name,
+                len(cvs_changesets),
             )
             self.swh_revision_gen = self.process_cvs_rlog_changesets(cvs_changesets)
         else:
@@ -398,8 +403,8 @@ class CvsLoader(BaseLoader):
             data = next(self.swh_revision_gen)
         except StopIteration:
             return False
-        except Exception as e:
-            self.log.exception(e)
+        except Exception:
+            self.log.exception("Exception in fetch_data:")
             return False  # Stopping iteration
         self._contents, self._skipped_contents, self._directories, rev = data
         self._revisions = [rev]
@@ -453,7 +458,7 @@ class CvsLoader(BaseLoader):
                 )
             }
         )
-        self.log.debug("snapshot: %s" % snap)
+        self.log.debug("snapshot: %s", snap)
         self.storage.snapshot_add([snap])
         return snap
 
@@ -464,7 +469,7 @@ class CvsLoader(BaseLoader):
         self.storage.directory_add(self._directories)
         self.storage.revision_add(self._revisions)
         self.snapshot = self.generate_and_load_snapshot(self._last_revision)
-        self.log.debug("SWH snapshot ID: %s" % hashutil.hash_to_hex(self.snapshot.id))
+        self.log.debug("SWH snapshot ID: %s", hashutil.hash_to_hex(self.snapshot.id))
         self.flush()
         self.loaded_snapshot_id = self.snapshot.id
         self._skipped_contents = []
