@@ -43,6 +43,7 @@ from swh.model.model import (
     TargetType,
     TimestampWithTimezone,
 )
+from swh.storage.algos.snapshot import snapshot_get_latest
 from swh.storage.interface import StorageInterface
 
 DEFAULT_BRANCH = b"HEAD"
@@ -96,10 +97,12 @@ class CvsLoader(BaseLoader):
         # internal state, current visit
         self._last_revision = None
         self._visit_status = "full"
-        self._load_status = "uneventful"
         self.visit_date = visit_date
         self.cvsroot_path = cvsroot_path
         self.snapshot = None
+        self.last_snapshot: Optional[Snapshot] = snapshot_get_latest(
+            self.storage, self.origin_url
+        )
 
     def compute_swh_revision(self, k, logmsg):
         """Compute swh hash data per CVS changeset.
@@ -119,11 +122,6 @@ class CvsLoader(BaseLoader):
         revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
         self.log.debug("SWH revision ID: %s" % hashutil.hash_to_hex(revision.id))
         self._last_revision = revision
-        if self._load_status == "uneventful":
-            # We have an eventful load if this revision is not already
-            # present in the archive
-            if not self.storage.revision_get([revision.id])[0]:
-                self._load_status = "eventful"
         return (revision, swh_dir)
 
     def process_cvs_changesets(
@@ -285,7 +283,6 @@ class CvsLoader(BaseLoader):
 
     def prepare(self):
         self._last_revision = None
-        self._load_status = "uneventful"
         self.swh_revision_gen = None
         if not self.cvsroot_path:
             self.cvsroot_path = tempfile.mkdtemp(
@@ -476,8 +473,13 @@ class CvsLoader(BaseLoader):
         self._revisions = []
 
     def load_status(self):
+        assert self.snapshot is not None
+        if self.last_snapshot == self.snapshot:
+            load_status = "uneventful"
+        else:
+            load_status = "eventful"
         return {
-            "status": self._load_status,
+            "status": load_status,
         }
 
     def visit_status(self):

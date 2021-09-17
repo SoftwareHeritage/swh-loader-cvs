@@ -94,6 +94,9 @@ def test_loader_cvs_2_visits_no_change(swh_storage, datadir, tmp_path):
         snapshot=RUNBABY_SNAPSHOT.id,
     )
 
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
     assert loader.load() == {"status": "uneventful"}
     visit_status2 = assert_last_visit_matches(
         loader.storage,
