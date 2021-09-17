@@ -12,7 +12,7 @@ import os
 import subprocess
 import tempfile
 import time
-from typing import Iterator, List, Optional, Sequence, Tuple
+from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple
 
 from urllib3.util import parse_url
 
@@ -37,6 +37,7 @@ from swh.model.model import (
     Person,
     Revision,
     RevisionType,
+    Sha1Git,
     SkippedContent,
     Snapshot,
     SnapshotBranch,
@@ -61,6 +62,16 @@ class CvsLoader(BaseLoader):
 
     visit_type = "cvs"
 
+    cvs_module_name: str
+    cvsclient: cvsclient.CVSClient
+
+    # remote CVS repository access (history is parsed from CVS rlog):
+    rlog_file: BinaryIO
+
+    swh_revision_gen: Iterator[
+        Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
+    ]
+
     def __init__(
         self,
         storage: StorageInterface,
@@ -80,31 +91,31 @@ class CvsLoader(BaseLoader):
         # origin url as unique identifier for origin in swh archive
         self.origin_url = origin_url if origin_url else self.cvsroot_url
         self.temp_directory = temp_directory
-        self.done = False
-
-        self.cvs_module_name = None
-
-        # remote CVS repository access (history is parsed from CVS rlog):
-        self.cvsclient = None
-        self.rlog_file = None
 
         # internal state used to store swh objects
         self._contents: List[Content] = []
         self._skipped_contents: List[SkippedContent] = []
         self._directories: List[Directory] = []
         self._revisions: List[Revision] = []
-        self.swh_revision_gen = None
         # internal state, current visit
-        self._last_revision = None
+        self._last_revision: Optional[Revision] = None
         self._visit_status = "full"
         self.visit_date = visit_date
+
+        if not cvsroot_path:
+            cvsroot_path = tempfile.mkdtemp(
+                suffix="-%s" % os.getpid(),
+                prefix=TEMPORARY_DIR_PREFIX_PATTERN,
+                dir=self.temp_directory,
+            )
         self.cvsroot_path = cvsroot_path
-        self.snapshot = None
+
+        self.snapshot: Optional[Snapshot] = None
         self.last_snapshot: Optional[Snapshot] = snapshot_get_latest(
             self.storage, self.origin_url
         )
 
-    def compute_swh_revision(self, k, logmsg):
+    def compute_swh_revision(self, k, logmsg) -> Tuple[Revision, from_disk.Directory]:
         """Compute swh hash data per CVS changeset.
 
         Returns:
@@ -115,6 +126,7 @@ class CvsLoader(BaseLoader):
         """
         # Compute SWH revision from the on-disk state
         swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
+        parents: Tuple[Sha1Git, ...]
         if self._last_revision:
             parents = (self._last_revision.id,)
         else:
@@ -234,12 +246,12 @@ class CvsLoader(BaseLoader):
             )
             yield contents, skipped_contents, directories, revision
 
-    def prepare_origin_visit(self):
+    def prepare_origin_visit(self) -> None:
         self.origin = Origin(
             url=self.origin_url if self.origin_url else self.cvsroot_url
         )
 
-    def pre_cleanup(self):
+    def pre_cleanup(self) -> None:
         """Cleanup potential dangling files from prior runs (e.g. OOM killed
            tasks)
 
@@ -250,10 +262,10 @@ class CvsLoader(BaseLoader):
             log=self.log,
         )
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         self.log.info("cleanup")
 
-    def fetch_cvs_repo_with_rsync(self, host, path):
+    def fetch_cvs_repo_with_rsync(self, host: str, path: str) -> None:
         # URL *must* end with a trailing slash in order to get CVSROOT listed
         url = "rsync://%s%s/" % (host, os.path.dirname(path))
         rsync = subprocess.run(["rsync", url], capture_output=True, encoding="ascii")
@@ -275,18 +287,10 @@ class CvsLoader(BaseLoader):
         if not have_cvsroot:
             raise NotFound("No CVSROOT directory found at %s" % url)
 
-        rsync = subprocess.run(["rsync", "-a", url, self.cvsroot_path])
-        rsync.check_returncode()
+        subprocess.run(["rsync", "-a", url, self.cvsroot_path]).check_returncode()
 
-    def prepare(self):
+    def prepare(self) -> None:
         self._last_revision = None
-        self.swh_revision_gen = None
-        if not self.cvsroot_path:
-            self.cvsroot_path = tempfile.mkdtemp(
-                suffix="-%s" % os.getpid(),
-                prefix=TEMPORARY_DIR_PREFIX_PATTERN,
-                dir=self.temp_directory,
-            )
         self.worktree_path = tempfile.mkdtemp(
             suffix="-%s" % os.getpid(),
             prefix=TEMPORARY_DIR_PREFIX_PATTERN,
@@ -390,7 +394,7 @@ class CvsLoader(BaseLoader):
         else:
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
 
-    def fetch_data(self):
+    def fetch_data(self) -> bool:
         """Fetch the next CVS revision."""
         try:
             data = next(self.swh_revision_gen)
@@ -455,7 +459,7 @@ class CvsLoader(BaseLoader):
         self.storage.snapshot_add([snap])
         return snap
 
-    def store_data(self):
+    def store_data(self) -> None:
         "Add our current CVS changeset to the archive."
         self.storage.skipped_content_add(self._skipped_contents)
         self.storage.content_add(self._contents)
@@ -470,7 +474,7 @@ class CvsLoader(BaseLoader):
         self._directories = []
         self._revisions = []
 
-    def load_status(self):
+    def load_status(self) -> Dict[str, Any]:
         assert self.snapshot is not None
         if self.last_snapshot == self.snapshot:
             load_status = "uneventful"
