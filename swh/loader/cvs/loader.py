@@ -136,8 +136,51 @@ class CvsLoader(BaseLoader):
         self._last_revision = revision
         return (revision, swh_dir)
 
+    def checkout_file_with_rcsparse(self, k, f, rcsfile):
+        path = file_path(self.cvsroot_path, f.path)
+        wtpath = os.path.join(self.worktree_path, path)
+        self.log.info("rev %s of file %s" % (f.rev, f.path))
+        if f.state == "dead":
+            # remove this file from work tree
+            try:
+                os.remove(wtpath)
+            except FileNotFoundError:
+                pass
+        else:
+            # create, or update, this file in the work tree
+            if not rcsfile:
+                rcsfile = rcsparse.rcsfile(f.path)
+            rcs = RcsKeywords()
+            contents = rcs.expand_keyword(f.path, rcsfile, f.rev)
+            os.makedirs(os.path.dirname(wtpath), exist_ok=True)
+            outfile = open(wtpath, mode="wb")
+            outfile.write(contents)
+            outfile.close()
+
+    def checkout_file_with_cvsclient(self, k, f, cvsclient):
+        path = file_path(self.cvsroot_path, f.path)
+        wtpath = os.path.join(self.worktree_path, path)
+        self.log.info("rev %s of file %s" % (f.rev, f.path))
+        if f.state == "dead":
+            # remove this file from work tree
+            try:
+                os.remove(wtpath)
+            except FileNotFoundError:
+                pass
+        else:
+            dirname = os.path.dirname(wtpath)
+            os.makedirs(dirname, exist_ok=True)
+            self.log.debug("checkout to %s\n" % wtpath)
+            fp = cvsclient.checkout(f.path, f.rev, dirname)
+            os.rename(fp.name, wtpath)
+            try:
+                fp.close()
+            except FileNotFoundError:
+                # Well, we have just renamed the file...
+                pass
+
     def process_cvs_changesets(
-        self, cvs_changesets,
+        self, cvs_changesets, use_rcsparse,
     ) -> Iterator[
         Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
     ]:
@@ -156,88 +199,23 @@ class CvsLoader(BaseLoader):
                 "changeset from %s by %s on branch %s", tstr, k.author, k.branch
             )
             logmsg = ""
-            # Check out the on-disk state of this revision
+            # Check out all files of this revision and get a log message.
+            #
+            # The log message is obtained from the first file in the changeset.
+            # The message will usually be the same for all affected files, and
+            # the SWH archive will only store one version of the log message.
             for f in k.revs:
                 rcsfile = None
-                path = file_path(self.cvsroot_path, f.path)
-                wtpath = os.path.join(self.worktree_path, path)
-                self.log.info("rev %s of file %s", f.rev, f.path)
-                if not logmsg:
-                    rcsfile = rcsparse.rcsfile(f.path)
-                    logmsg = rcsfile.getlog(k.revs[0].rev)
-                if f.state == "dead":
-                    # remove this file from work tree
-                    try:
-                        os.remove(wtpath)
-                    except FileNotFoundError:
-                        pass
-                else:
-                    # create, or update, this file in the work tree
-                    if not rcsfile:
+                if use_rcsparse:
+                    if rcsfile is None:
                         rcsfile = rcsparse.rcsfile(f.path)
-                    rcs = RcsKeywords()
-                    contents = rcs.expand_keyword(f.path, rcsfile, f.rev)
-                    os.makedirs(os.path.dirname(wtpath), exist_ok=True)
-                    outfile = open(wtpath, mode="wb")
-                    outfile.write(contents)
-                    outfile.close()
-
-            (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
-            (contents, skipped_contents, directories) = from_disk.iter_directory(
-                swh_dir
-            )
-            yield contents, skipped_contents, directories, revision
-
-    def process_cvs_rlog_changesets(
-        self, cvs_changesets,
-    ) -> Iterator[
-        Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
-    ]:
-        """Process CVS rlog revisions.
-
-        At each CVS revision, check out contents and compute swh hashes.
-
-        Yields:
-            tuple (contents, skipped-contents, directories, revision) of dict as a
-            dictionary with keys, sha1_git, sha1, etc...
-
-        """
-        # XXX At present changeset IDs are recomputed on the fly during every visit.
-        # If we were able to maintain a cached somewhere which can be indexed by a
-        # cvs2gitdump.ChangeSetKey and yields an SWH revision hash we could avoid
-        # doing a lot of redundant work during every visit.
-        for k in cvs_changesets:
-            tstr = time.strftime("%c", time.gmtime(k.max_time))
-            self.log.info(
-                "changeset from %s by %s on branch %s", tstr, k.author, k.branch
-            )
-            logmsg = ""
-            # Check out the on-disk state of this revision
-            for f in k.revs:
-                path = file_path(self.cvsroot_path, f.path)
-                wtpath = os.path.join(self.worktree_path, path)
-                self.log.info("rev %s of file %s", f.rev, f.path)
-                if not logmsg:
-                    logmsg = self.rlog.getlog(self.rlog_file, f.path, k.revs[0].rev)
-                self.log.debug("f.state is %s", f.state)
-                if f.state == "dead":
-                    # remove this file from work tree
-                    try:
-                        os.remove(wtpath)
-                    except FileNotFoundError:
-                        pass
+                    if not logmsg:
+                        logmsg = rcsfile.getlog(k.revs[0].rev)
+                    self.checkout_file_with_rcsparse(k, f, rcsfile)
                 else:
-                    dirname = os.path.dirname(wtpath)
-                    os.makedirs(dirname, exist_ok=True)
-                    self.log.debug("checkout to %s", wtpath)
-                    assert self.cvsclient  # avoid None type error from mypy
-                    fp = self.cvsclient.checkout(f.path, f.rev, dirname)
-                    os.rename(fp.name, wtpath)
-                    try:
-                        fp.close()
-                    except FileNotFoundError:
-                        # Well, we have just renamed the file...
-                        pass
+                    if not logmsg:
+                        logmsg = self.rlog.getlog(self.rlog_file, f.path, k.revs[0].rev)
+                    self.checkout_file_with_cvsclient(k, f, self.cvsclient)
 
             # TODO: prune empty directories?
             (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
@@ -370,7 +348,9 @@ class CvsLoader(BaseLoader):
                 self.cvs_module_name,
                 len(cvs_changesets),
             )
-            self.swh_revision_gen = self.process_cvs_changesets(cvs_changesets)
+            self.swh_revision_gen = self.process_cvs_changesets(
+                cvs_changesets, use_rcsparse=True
+            )
         elif url.scheme == "pserver" or url.scheme == "fake" or url.scheme == "ssh":
             # remote CVS repository conversion
             self.cvsclient = cvsclient.CVSClient(url)
@@ -390,7 +370,9 @@ class CvsLoader(BaseLoader):
                 self.cvs_module_name,
                 len(cvs_changesets),
             )
-            self.swh_revision_gen = self.process_cvs_rlog_changesets(cvs_changesets)
+            self.swh_revision_gen = self.process_cvs_changesets(
+                cvs_changesets, use_rcsparse=False
+            )
         else:
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
 
