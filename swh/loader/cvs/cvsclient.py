@@ -37,6 +37,7 @@ VALID_RESPONSES = ["ok", "error", "Valid-requests", "Checked-in",
 
 def scramble_password(password):
     s = ['A']  # scramble scheme version number
+    # fmt: off
     scramble_shifts = [
         0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  # noqa: E241
        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,  # noqa: E241,E131,E501
@@ -54,6 +55,7 @@ def scramble_password(password):
       227,231,219,169,175,156,206,198,129,164,150,210,154,177,134,127,  # noqa: E241,E131,E501
       182,128,158,208,162,132,167,209,149,241,153,251,237,236,171,195,  # noqa: E241,E131,E501
       243,233,253,240,194,250,191,155,142,137,245,235,163,242,178,152]  # noqa: E241,E131,E501
+    # fmt: on
     for c in password:
         s.append('%c' % scramble_shifts[ord(c)])
     return "".join(s)
