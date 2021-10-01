@@ -22,7 +22,7 @@ def convert_to_datetime(date: Optional[str]) -> Optional[datetime]:
 @shared_task(name=__name__ + ".LoadCvsRepository")
 def load_cvs(
     *,
-    url: Optional[str] = None,
+    url: str,
     origin_url: Optional[str] = None,
     destination_path: Optional[str] = None,
     swh_revision: Optional[str] = None,
