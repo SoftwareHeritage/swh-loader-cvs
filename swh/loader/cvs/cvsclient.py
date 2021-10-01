@@ -87,13 +87,15 @@ class CVSClient:
             raise NotFound("Could not connect to %s:%s", hostname, port)
 
         scrambled_password = scramble_password(password)
-        request = "BEGIN AUTH REQUEST\n%s/%s\n%s\n%s\nEND AUTH REQUEST\n" \
-            % (self.cvsroot_path, self.cvs_module_name, user, scrambled_password)
+        request = "BEGIN AUTH REQUEST\n%s\n%s\n%s\nEND AUTH REQUEST\n" \
+            % (self.cvsroot_path, user, scrambled_password)
+        print("Request: %s\n" % request)
         self.socket.sendall(request.encode('UTF-8'))
 
-        response = self.socket.recv(11)
+        response = self.conn_read_line()
         if response != b"I LOVE YOU\n":
-            raise NotFound("pserver authentication failed for %s:%s" % (hostname, port))
+            raise NotFound("pserver authentication failed for %s:%s: %s" %
+                           (hostname, port, response))
 
     def connect_ssh(self, hostname, port, auth):
         command = ['ssh']
