@@ -86,7 +86,7 @@ class CVSProtocolError(Exception):
     pass
 
 
-_re_kb_opt = re.compile(b"\/-kb\/")  # noqa: W605
+_re_kb_opt = re.compile(rb"\/-kb\/")
 
 
 class CVSClient:

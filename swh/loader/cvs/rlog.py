@@ -260,17 +260,17 @@ _EOF_ERROR = b"error message found"  # rlog issued an error
 # redirected to a file or pipe. (the prefix is present in subsequent errors
 # and when rlog is run from the console). So the expression below is more
 # complicated
-_re_log_error = re.compile(b"^(?:rlog\: )*(.*,v)(?:\:\d+)?\: (.*)$")  # noqa: W605
+_re_log_error = re.compile(rb"^(?:rlog\: )*(.*,v)(?:\:\d+)?\: (.*)$")
 
 # CVSNT error messages look like:
 # cvs rcsfile: `C:/path/to/file,v' does not appear to be a valid rcs file
 # cvs [rcsfile aborted]: C:/path/to/file,v: No such file or directory
 # cvs [rcsfile aborted]: cannot open C:/path/to/file,v: Permission denied
 _re_cvsnt_error = re.compile(
-    b"^(?:cvs rcsfile\: |cvs \[rcsfile aborted\]: )"  # noqa: W605
-    b"(?:\`(.*,v)' |"  # noqa: W605
-    b"cannot open (.*,v)\: |(.*,v)\: |)"  # noqa: W605
-    b"(.*)$"
+    rb"^(?:cvs rcsfile\: |cvs \[rcsfile aborted\]: )"
+    rb"(?:\`(.*,v)' |"
+    rb"cannot open (.*,v)\: |(.*,v)\: |)"
+    rb"(.*)$"
 )
 
 
@@ -366,15 +366,15 @@ def _parse_log_header(fp):
 
 
 _re_log_info = re.compile(
-    b"^date:\s+([^;]+);"  # noqa: W605
-    b"\s+author:\s+([^;]+);"  # noqa: W605
-    b"\s+state:\s+([^;]+);"  # noqa: W605
-    b"(\s+lines:\s+([0-9\s+-]+);?)?"  # noqa: W605
-    b"(\s+commitid:\s+([a-zA-Z0-9]+);)?\n$"  # noqa: W605
+    rb"^date:\s+([^;]+);"
+    rb"\s+author:\s+([^;]+);"
+    rb"\s+state:\s+([^;]+);"
+    rb"(\s+lines:\s+([0-9\s+-]+);?)?"
+    rb"(\s+commitid:\s+([a-zA-Z0-9]+);)?\n$"
 )
 
 # TODO: _re_rev should be updated to extract the "locked" flag
-_re_rev = re.compile(b"^revision\s+([0-9.]+).*")  # noqa: W605
+_re_rev = re.compile(rb"^revision\s+([0-9.]+).*")
 
 
 def cvs_strptime(timestr):
