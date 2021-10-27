@@ -74,8 +74,8 @@ class RlogConv:
         self.tags = dict()
         self.offsets = dict()
 
-    def _process_rlog_entry(self, path, taginfo, revisions, logmsgs):
-        """ Convert an rlog entry into an item in self.changesets """
+    def _process_rlog_revisions(self, path, taginfo, revisions, logmsgs):
+        """ Convert RCS revision history of a file into self.changesets items """
         rtags = dict()
         # RCS and CVS represent branches by adding digits to revision numbers.
         # And CVS assigns special meaning to certain revision number ranges.
@@ -201,6 +201,7 @@ class RlogConv:
             filename, branch, taginfo, lockinfo, errmsg, eof = _parse_log_header(fp)
             revisions = {}
             logmsgs = {}
+            path = ""
             if filename:
                 # There is no known encoding of filenames in CVS.
                 # Attempt to decode the path with our list of known encodings.
@@ -213,19 +214,22 @@ class RlogConv:
                         break
                     except UnicodeError:
                         pass
+                path = file_path(self.cvsroot_path, fname)
+            elif not eof:
+                raise ValueError("No filename found in rlog header")
             while not eof:
                 off = fp.tell()
                 rev, logmsg, eof = _parse_log_entry(fp)
                 if rev:
                     revisions[rev[0]] = rev
                     logmsgs[rev[0]] = logmsg
-            if eof != _EOF_LOG and eof != _EOF_ERROR:
-                path = file_path(self.cvsroot_path, fname)
-                if path not in self.offsets.keys():
-                    self.offsets[path] = dict()
-                if rev:
-                    self.offsets[path][rev[0]] = off
-                self._process_rlog_entry(path, taginfo, revisions, logmsgs)
+                if eof != _EOF_LOG and eof != _EOF_ERROR:
+                    if path not in self.offsets.keys():
+                        self.offsets[path] = dict()
+                    if rev:
+                        self.offsets[path][rev[0]] = off
+
+            self._process_rlog_revisions(path, taginfo, revisions, logmsgs)
 
     def getlog(self, fp, path, rev):
         off = self.offsets[path][rev]
