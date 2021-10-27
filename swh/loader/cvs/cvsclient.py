@@ -383,6 +383,18 @@ class CVSClient:
             elif response[0:8] == b"Created ":
                 skip_line = True
                 continue
+            elif response[0:11] == b"Checked-in ":
+                skip_line = True
+                continue
+            elif response[0:16] == b"Update-existing ":
+                skip_line = True
+                continue
+            elif response[0:8] == b"Updated ":
+                skip_line = True
+                continue
+            elif response[0:8] == b"Removed ":
+                skip_line = True
+                continue
             elif response[0:1] == b"/" and _re_kb_opt.search(response):
                 expect_modeline = True
                 continue
