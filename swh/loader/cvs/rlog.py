@@ -370,7 +370,7 @@ _re_log_info = re.compile(
     b"\s+author:\s+([^;]+);"  # noqa: W605
     b"\s+state:\s+([^;]+);"  # noqa: W605
     b"(\s+lines:\s+([0-9\s+-]+);?)?"  # noqa: W605
-    b"(\s+commitid:\s+([a-zA-Z0-9]+))?\n$"  # noqa: W605
+    b"(\s+commitid:\s+([a-zA-Z0-9]+);)?\n$"  # noqa: W605
 )
 
 # TODO: _re_rev should be updated to extract the "locked" flag
