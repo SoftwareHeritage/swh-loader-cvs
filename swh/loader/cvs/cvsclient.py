@@ -335,23 +335,33 @@ class CVSClient:
             % (self.cvs_module_name, self.cvs_module_name, rev, path)
         )
         while True:
-            if have_bytecount and bytecount > 0:
+            if have_bytecount:
+                if bytecount < 0:
+                    raise CVSProtocolError("server sent too much file content data")
                 response = self.conn_read_line(require_newline=False)
                 if response is None:
                     raise CVSProtocolError("Incomplete response from CVS server")
-                co_output.write(response)
-                bytecount -= len(response)
-                if bytecount < 0:
-                    raise CVSProtocolError(
-                        "Overlong response from " "CVS server: %s" % response
-                    )
-                continue
+                if len(response) > bytecount:
+                    # When a file lacks a final newline we receive a line which
+                    # contains file content as well as CVS protocol response data.
+                    # Split last line of file content from CVS protocol data...
+                    co_output.write(response[:bytecount])
+                    response = response[bytecount:]
+                    bytecount = 0
+                    # ...and process the CVS protocol response below.
+                else:
+                    co_output.write(response)
+                    bytecount -= len(response)
+                    continue
             else:
                 response = self.conn_read_line()
             if response[0:2] == b"E ":
                 raise CVSProtocolError("Error from CVS server: %s" % response)
-            if have_bytecount and bytecount == 0 and response == b"ok\n":
-                break
+            if response == b"ok\n":
+                if have_bytecount:
+                    break
+                else:
+                    raise CVSProtocolError("server sent 'ok' but no file contents")
             if skip_line:
                 skip_line = False
                 continue
