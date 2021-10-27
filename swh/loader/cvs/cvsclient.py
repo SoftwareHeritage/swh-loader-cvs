@@ -372,27 +372,17 @@ class CVSClient:
                     raise CVSProtocolError("Bad CVS protocol response: %s" % response)
                 have_bytecount = True
                 continue
-            elif response == b"M \n":
-                continue
-            elif response == b"MT +updated\n":
-                continue
-            elif response == b"MT -updated\n":
+            elif response in (b"M \n", b"MT +updated\n", b"MT -updated\n"):
                 continue
             elif response[0:9] == b"MT fname ":
                 continue
-            elif response[0:8] == b"Created ":
-                skip_line = True
-                continue
-            elif response[0:11] == b"Checked-in ":
-                skip_line = True
-                continue
-            elif response[0:16] == b"Update-existing ":
-                skip_line = True
-                continue
-            elif response[0:8] == b"Updated ":
-                skip_line = True
-                continue
-            elif response[0:8] == b"Removed ":
+            elif response.split(b" ")[0] in (
+                b"Created",
+                b"Checked-in",
+                b"Update-existing",
+                b"Updated",
+                b"Removed",
+            ):
                 skip_line = True
                 continue
             elif response[0:1] == b"/" and _re_kb_opt.search(response):
