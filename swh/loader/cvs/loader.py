@@ -144,7 +144,7 @@ class CvsLoader(BaseLoader):
     ) -> None:
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.worktree_path, path)
-        self.log.info("rev %s of file %s" % (f.rev, f.path))
+        self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
         if f.state == "dead":
             # remove this file from work tree
             try:
@@ -167,7 +167,7 @@ class CvsLoader(BaseLoader):
     ):
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.worktree_path, path)
-        self.log.info("rev %s of file %s" % (f.rev, f.path))
+        self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
         if f.state == "dead":
             # remove this file from work tree
             try:
