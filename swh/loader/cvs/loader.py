@@ -178,7 +178,7 @@ class CvsLoader(BaseLoader):
             dirname = os.path.dirname(wtpath)
             os.makedirs(dirname, exist_ok=True)
             self.log.debug("checkout to %s\n" % wtpath)
-            fp = cvsclient.checkout(f.path, f.rev, dirname)
+            fp = cvsclient.checkout(f.path, f.rev, dirname, expand_keywords=True)
             os.rename(fp.name, wtpath)
             try:
                 fp.close()

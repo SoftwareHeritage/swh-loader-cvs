@@ -8,7 +8,6 @@
 """
 
 import os.path
-import re
 import socket
 import subprocess
 import tempfile
@@ -84,9 +83,6 @@ def scramble_password(password):
 
 class CVSProtocolError(Exception):
     pass
-
-
-_re_kb_opt = re.compile(rb"\/-kb\/")
 
 
 class CVSClient:
@@ -310,7 +306,18 @@ class CVSClient:
         fp.seek(0)
         return self._parse_rlog_response(fp)
 
-    def checkout(self, path, rev, dest_dir):
+    def checkout(self, path, rev, dest_dir, expand_keywords):
+        """
+        Download a file revision from the cvs server and store
+        the file's contents in a temporary file. If expand_keywords is
+        set then ask the server to expand RCS keywords in file content.
+
+        From the server's point of view this function behaves much
+        like 'cvs update -r rev path'. The server is unaware that
+        we do not actually maintain a CVS working copy. Because of
+        this it sends more information than we need. We simply skip
+        responses that are of no interest to us.
+        """
         skip_line = False
         expect_modeline = False
         expect_bytecount = False
@@ -325,14 +332,20 @@ class CVSClient:
             delete=True,
             prefix="cvsclient-checkout-%s-r%s-" % (filename, rev),
         )
+        if expand_keywords:
+            # use server-side per-file default expansion rules
+            karg = ""
+        else:
+            # force binary file mode
+            karg = "Argument -kb\n"
         # TODO: cvs <= 1.10 servers expect to be given every Directory along the path.
         self.conn_write_str(
             "Directory %s\n%s\n"
             "Global_option -q\n"
             "Argument -r%s\n"
-            "Argument -kb\n"
+            "%s"
             "Argument --\nArgument %s\nco \n"
-            % (self.cvs_module_name, self.cvs_module_name, rev, path)
+            % (self.cvs_module_name, self.cvs_module_name, rev, karg, path)
         )
         while True:
             if have_bytecount:
@@ -385,7 +398,7 @@ class CVSClient:
             ):
                 skip_line = True
                 continue
-            elif response[0:1] == b"/" and _re_kb_opt.search(response):
+            elif response[0:1] == b"/":
                 expect_modeline = True
                 continue
             elif expect_modeline and response[0:2] == b"u=":
