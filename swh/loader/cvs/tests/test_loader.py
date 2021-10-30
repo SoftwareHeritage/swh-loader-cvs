@@ -331,7 +331,7 @@ def test_loader_cvs_visit_pserver_no_eol(swh_storage, datadir, tmp_path):
     repo_url = "fake://" + repo_url[7:]
 
     loader = CvsLoader(
-        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, extracted_name)
     )
 
     assert loader.load() == {"status": "eventful"}
@@ -535,3 +535,93 @@ def test_loader_cvs_pserver_with_file_deleted_and_readded(
     }
 
     check_snapshot(GREEK_SNAPSHOT5, loader.storage)
+
+
+DINO_SNAPSHOT = Snapshot(
+    id=hash_to_bytes("417021c16e17c5e0038cf0e73dbf48a6142c8304"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("df61a776c401a178cc796545849fc87bdadb2001"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+
+def test_loader_cvs_readded_file_in_attic(swh_storage, datadir, tmp_path):
+    """Conversion of history with RCS files in the Attic"""
+    # This repository has some file revisions marked "dead" in the Attic only.
+    # This is different to the re-added file tests above, where the RCS file
+    # was moved out of the Attic again as soon as the corresponding deleted
+    # file was re-added. Failure to detect the "dead" file revisions in the
+    # Attic would result in errors in our converted history.
+    archive_name = "dino-readded-file"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/src"  # CVS module name
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT.id,
+    )
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 38,
+        "directory": 105,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 35,
+        "skipped_content": 0,
+        "snapshot": 35,
+    }
+
+    check_snapshot(DINO_SNAPSHOT, loader.storage)
+
+
+def test_loader_cvs_pserver_readded_file_in_attic(swh_storage, datadir, tmp_path):
+    """Conversion over pserver with RCS files in the Attic"""
+    # This repository has some file revisions marked "dead" in the Attic only.
+    # This is different to the re-added file tests above, where the RCS file
+    # was moved out of the Attic again as soon as the corresponding deleted
+    # file was re-added. Failure to detect the "dead" file revisions in the
+    # Attic would result in errors in our converted history.
+    # This has special implications for the pserver case, because the "dead"
+    # revisions will not appear in in the output of 'cvs rlog' by default.
+    archive_name = "dino-readded-file"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/src"  # CVS module name
+
+    # Ask our cvsclient to connect via the 'cvs server' command
+    repo_url = f"fake://{repo_url[7:]}"
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT.id,
+    )
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 38,
+        "directory": 105,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 35,
+        "skipped_content": 0,
+        "snapshot": 35,
+    }
+
+    check_snapshot(DINO_SNAPSHOT, loader.storage)

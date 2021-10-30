@@ -49,7 +49,7 @@ import re
 import time
 from typing import BinaryIO, Dict, List, NamedTuple, Optional, Tuple
 
-from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey, file_path
+from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey
 
 # There is no known encoding of path names in CVS. The actual encoding used
 # will depend on the CVS server's operating system and perhaps even the
@@ -90,7 +90,7 @@ class RlogConv:
         path: str,
         taginfo: Dict[bytes, bytes],
         revisions: Dict[str, revtuple],
-        logmsgs: Dict[str, Optional[bytes]]
+        logmsgs: Dict[str, Optional[bytes]],
     ) -> None:
         """ Convert RCS revision history of a file into self.changesets items """
         rtags: Dict[str, List[str]] = dict()
@@ -218,6 +218,9 @@ class RlogConv:
                         self.tags[t] = a
 
     def parse_rlog(self, fp: BinaryIO) -> None:
+        self.changesets = dict()
+        self.tags = dict()
+        self.offsets = dict()
         eof = None
         while eof != _EOF_LOG and eof != _EOF_ERROR:
             filename, branch, taginfo, lockinfo, errmsg, eof = _parse_log_header(fp)
@@ -236,7 +239,7 @@ class RlogConv:
                         break
                     except UnicodeError:
                         pass
-                path = file_path(self.cvsroot_path, fname)
+                path = fname
             elif not eof:
                 raise ValueError("No filename found in rlog header")
             while not eof:
@@ -296,8 +299,10 @@ _re_cvsnt_error = re.compile(
 )
 
 
-def _parse_log_header(fp: BinaryIO) -> Tuple[
-        bytes, bytes, Dict[bytes, bytes], Dict[bytes, bytes], bytes, Optional[bytes]
+def _parse_log_header(
+    fp: BinaryIO,
+) -> Tuple[
+    bytes, bytes, Dict[bytes, bytes], Dict[bytes, bytes], bytes, Optional[bytes]
 ]:
     """Parse and RCS/CVS log header.
 

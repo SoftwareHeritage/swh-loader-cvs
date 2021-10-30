@@ -289,16 +289,32 @@ class CVSClient:
         rlog_output.seek(0)
         return rlog_output
 
-    def fetch_rlog(self):
+    def fetch_rlog(self, path="", state=""):
+        path_arg = path or self.cvs_module_name
+        if len(state) > 0:
+            state_arg = "Argument -s%s\n" % state
+        else:
+            state_arg = ""
         fp = tempfile.TemporaryFile()
         self.conn_write_str(
-            "Global_option -q\nArgument --\nArgument %s\nrlog\n" % self.cvs_module_name
+            "Global_option -q\n"
+            f"{state_arg}"
+            "Argument --\n"
+            f"Argument {path_arg}\n"
+            "rlog\n"
         )
         while True:
             response = self.conn_read_line()
             if response is None:
                 raise CVSProtocolError("No response from CVS server")
             if response[0:2] == b"E ":
+                if len(path) > 0 and response[-11:] == b" - ignored\n":
+                    response = self.conn_read_line()
+                    if response != b"error  \n":
+                        raise CVSProtocolError(
+                            "Invalid response from CVS server: %s" % response
+                        )
+                    return None  # requested path does not exist (ignore)
                 raise CVSProtocolError("Error response from CVS server: %s" % response)
             fp.write(response)
             if response == b"ok\n":

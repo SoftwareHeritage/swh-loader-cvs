@@ -9,10 +9,11 @@ swh-storage.
 """
 from datetime import datetime
 import os
+import os.path
 import subprocess
 import tempfile
 import time
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple, cast
 
 from urllib3.util import parse_url
 
@@ -102,13 +103,6 @@ class CvsLoader(BaseLoader):
         self._last_revision: Optional[Revision] = None
         self._visit_status = "full"
         self.visit_date = visit_date
-
-        if not cvsroot_path:
-            cvsroot_path = tempfile.mkdtemp(
-                suffix="-%s" % os.getpid(),
-                prefix=TEMPORARY_DIR_PREFIX_PATTERN,
-                dir=self.temp_directory,
-            )
         self.cvsroot_path = cvsroot_path
 
         self.snapshot: Optional[Snapshot] = None
@@ -142,6 +136,7 @@ class CvsLoader(BaseLoader):
     def checkout_file_with_rcsparse(
         self, k: ChangeSetKey, f: FileRevision, rcsfile: rcsparse.rcsfile
     ) -> None:
+        assert self.cvsroot_path
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.worktree_path, path)
         self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
@@ -165,6 +160,7 @@ class CvsLoader(BaseLoader):
     def checkout_file_with_cvsclient(
         self, k: ChangeSetKey, f: FileRevision, cvsclient: CVSClient
     ):
+        assert self.cvsroot_path
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.worktree_path, path)
         self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
@@ -178,7 +174,7 @@ class CvsLoader(BaseLoader):
             dirname = os.path.dirname(wtpath)
             os.makedirs(dirname, exist_ok=True)
             self.log.debug("checkout to %s\n" % wtpath)
-            fp = cvsclient.checkout(f.path, f.rev, dirname, expand_keywords=True)
+            fp = cvsclient.checkout(path, f.rev, dirname, expand_keywords=True)
             os.rename(fp.name, wtpath)
             try:
                 fp.close()
@@ -272,7 +268,13 @@ class CvsLoader(BaseLoader):
         if not have_cvsroot:
             raise NotFound("No CVSROOT directory found at %s" % url)
 
-        subprocess.run(["rsync", "-a", url, self.cvsroot_path]).check_returncode()
+        # mypy complains: List item 3 has incompatible type "Optional[str]";
+        # because self.cvsroot_path is an optional argument. We do however
+        # ensure that it is initialized if the loader is not passed a
+        # corresponding argument. Better ideas than ignoring types on this line?
+        subprocess.run(
+            ["rsync", "-a", url, self.cvsroot_path]  # type: ignore
+        ).check_returncode()
 
     def prepare(self) -> None:
         self._last_revision = None
@@ -292,14 +294,20 @@ class CvsLoader(BaseLoader):
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
         self.cvs_module_name = os.path.basename(url.path)
         os.mkdir(os.path.join(self.worktree_path, self.cvs_module_name))
-        if url.scheme == "file":
-            if not os.path.exists(url.path):
-                raise NotFound
-        elif url.scheme == "rsync":
-            self.fetch_cvs_repo_with_rsync(url.host, url.path)
-
         if url.scheme == "file" or url.scheme == "rsync":
             # local CVS repository conversion
+            if not self.cvsroot_path:
+                self.cvsroot_path = tempfile.mkdtemp(
+                    suffix="-%s" % os.getpid(),
+                    prefix=TEMPORARY_DIR_PREFIX_PATTERN,
+                    dir=self.temp_directory,
+                )
+            if url.scheme == "file":
+                if not os.path.exists(url.path):
+                    raise NotFound
+            elif url.scheme == "rsync":
+                self.fetch_cvs_repo_with_rsync(url.host, url.path)
+
             have_rcsfile = False
             have_cvsroot = False
             for root, dirs, files in os.walk(self.cvsroot_path):
@@ -360,6 +368,8 @@ class CvsLoader(BaseLoader):
             )
         elif url.scheme == "pserver" or url.scheme == "fake" or url.scheme == "ssh":
             # remote CVS repository conversion
+            if not self.cvsroot_path:
+                self.cvsroot_path = os.path.dirname(url.path)
             self.cvsclient = CVSClient(url)
             cvsroot_path = os.path.dirname(url.path)
             self.log.info(
@@ -369,8 +379,50 @@ class CvsLoader(BaseLoader):
                 self.cvs_module_name,
             )
             self.rlog = RlogConv(cvsroot_path, CHANGESET_FUZZ_SEC)
-            self.rlog_file = self.cvsclient.fetch_rlog()
-            self.rlog.parse_rlog(self.rlog_file)
+            main_rlog_file = self.cvsclient.fetch_rlog()
+            self.rlog.parse_rlog(main_rlog_file)
+            # Find file deletion events only visible in Attic directories.
+            main_changesets = self.rlog.changesets
+            attic_paths = []
+            attic_rlog_files = []
+            assert self.cvsroot_path
+            for k in main_changesets:
+                for changed_file in k.revs:
+                    path = file_path(self.cvsroot_path, changed_file.path)
+                    if path.startswith(self.cvsroot_path):
+                        path = path[
+                            len(os.path.commonpath([self.cvsroot_path, path])) + 1 :
+                        ]
+                    parent_path = os.path.dirname(path)
+
+                    if parent_path.split("/")[-1] == "Attic":
+                        continue
+                    attic_path = parent_path + "/Attic"
+                    if attic_path in attic_paths:
+                        continue
+                    attic_paths.append(attic_path)  # avoid multiple visits
+                    # Try to fetch more rlog data from this Attic directory.
+                    attic_rlog_file = self.cvsclient.fetch_rlog(
+                        path=attic_path, state="dead",
+                    )
+                    if attic_rlog_file:
+                        attic_rlog_files.append(attic_rlog_file)
+            if len(attic_rlog_files) == 0:
+                self.rlog_file = main_rlog_file
+            else:
+                # Combine all the rlog pieces we found and re-parse.
+                fp = tempfile.TemporaryFile()
+                for attic_rlog_file in attic_rlog_files:
+                    for line in attic_rlog_file.readlines():
+                        fp.write(line)
+                        attic_rlog_file.close()
+                main_rlog_file.seek(0)
+                for line in main_rlog_file.readlines():
+                    fp.write(line)
+                main_rlog_file.close()
+                fp.seek(0)
+                self.rlog.parse_rlog(cast(BinaryIO, fp))
+                self.rlog_file = cast(BinaryIO, fp)
             cvs_changesets = sorted(self.rlog.changesets)
             self.log.info(
                 "CVS changesets found for %s: %d",
