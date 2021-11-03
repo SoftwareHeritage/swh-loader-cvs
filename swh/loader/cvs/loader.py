@@ -22,10 +22,11 @@ from swh.loader.cvs.cvs2gitdump.cvs2gitdump import (
     CHANGESET_FUZZ_SEC,
     ChangeSetKey,
     CvsConv,
+    FileRevision,
     RcsKeywords,
     file_path,
 )
-import swh.loader.cvs.cvsclient as cvsclient
+from swh.loader.cvs.cvsclient import CVSClient
 import swh.loader.cvs.rcsparse as rcsparse
 from swh.loader.cvs.rlog import RlogConv
 from swh.loader.exception import NotFound
@@ -52,6 +53,10 @@ DEFAULT_BRANCH = b"HEAD"
 TEMPORARY_DIR_PREFIX_PATTERN = "swh.loader.cvs."
 
 
+class Foo:
+    pass
+
+
 class CvsLoader(BaseLoader):
     """Swh cvs loader.
 
@@ -63,7 +68,7 @@ class CvsLoader(BaseLoader):
     visit_type = "cvs"
 
     cvs_module_name: str
-    cvsclient: cvsclient.CVSClient
+    cvsclient: CVSClient
 
     # remote CVS repository access (history is parsed from CVS rlog):
     rlog_file: BinaryIO
@@ -115,7 +120,9 @@ class CvsLoader(BaseLoader):
             self.storage, self.origin_url
         )
 
-    def compute_swh_revision(self, k, logmsg) -> Tuple[Revision, from_disk.Directory]:
+    def compute_swh_revision(
+        self, k: ChangeSetKey, logmsg: Optional[bytes]
+    ) -> Tuple[Revision, from_disk.Directory]:
         """Compute swh hash data per CVS changeset.
 
         Returns:
@@ -136,7 +143,9 @@ class CvsLoader(BaseLoader):
         self._last_revision = revision
         return (revision, swh_dir)
 
-    def checkout_file_with_rcsparse(self, k, f, rcsfile):
+    def checkout_file_with_rcsparse(
+        self, k: ChangeSetKey, f: FileRevision, rcsfile: rcsparse.rcsfile
+    ) -> None:
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.worktree_path, path)
         self.log.info("rev %s of file %s" % (f.rev, f.path))
@@ -157,7 +166,9 @@ class CvsLoader(BaseLoader):
             outfile.write(contents)
             outfile.close()
 
-    def checkout_file_with_cvsclient(self, k, f, cvsclient):
+    def checkout_file_with_cvsclient(
+        self, k: ChangeSetKey, f: FileRevision, cvsclient: CVSClient
+    ):
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.worktree_path, path)
         self.log.info("rev %s of file %s" % (f.rev, f.path))
@@ -180,7 +191,9 @@ class CvsLoader(BaseLoader):
                 pass
 
     def process_cvs_changesets(
-        self, cvs_changesets, use_rcsparse,
+        self,
+        cvs_changesets: List[ChangeSetKey],
+        use_rcsparse: bool,
     ) -> Iterator[
         Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
     ]:
@@ -198,7 +211,7 @@ class CvsLoader(BaseLoader):
             self.log.info(
                 "changeset from %s by %s on branch %s", tstr, k.author, k.branch
             )
-            logmsg = ""
+            logmsg: Optional[bytes] = b""
             # Check out all files of this revision and get a log message.
             #
             # The log message is obtained from the first file in the changeset.
@@ -231,7 +244,7 @@ class CvsLoader(BaseLoader):
 
     def pre_cleanup(self) -> None:
         """Cleanup potential dangling files from prior runs (e.g. OOM killed
-           tasks)
+        tasks)
 
         """
         clean_dangling_folders(
@@ -353,7 +366,7 @@ class CvsLoader(BaseLoader):
             )
         elif url.scheme == "pserver" or url.scheme == "fake" or url.scheme == "ssh":
             # remote CVS repository conversion
-            self.cvsclient = cvsclient.CVSClient(url)
+            self.cvsclient = CVSClient(url)
             cvsroot_path = os.path.dirname(url.path)
             self.log.info(
                 "Fetching CVS rlog from %s:%s/%s",
@@ -390,7 +403,11 @@ class CvsLoader(BaseLoader):
         return True
 
     def build_swh_revision(
-        self, k: ChangeSetKey, logmsg: bytes, dir_id: bytes, parents: Sequence[bytes]
+        self,
+        k: ChangeSetKey,
+        logmsg: Optional[bytes],
+        dir_id: bytes,
+        parents: Sequence[bytes],
     ) -> Revision:
         """Given a CVS revision, build a swh revision.
 
@@ -405,7 +422,7 @@ class CvsLoader(BaseLoader):
 
         """
         author = Person.from_fullname(k.author.encode("UTF-8"))
-        date = TimestampWithTimezone.from_datetime(k.max_time)
+        date = TimestampWithTimezone.from_dict(k.max_time)
 
         return Revision(
             type=RevisionType.CVS,
@@ -420,7 +437,7 @@ class CvsLoader(BaseLoader):
             parents=tuple(parents),
         )
 
-    def generate_and_load_snapshot(self, revision) -> Snapshot:
+    def generate_and_load_snapshot(self, revision: Revision) -> Snapshot:
         """Create the snapshot either from existing revision.
 
         Args:
@@ -447,6 +464,7 @@ class CvsLoader(BaseLoader):
         self.storage.content_add(self._contents)
         self.storage.directory_add(self._directories)
         self.storage.revision_add(self._revisions)
+        assert self._last_revision is not None
         self.snapshot = self.generate_and_load_snapshot(self._last_revision)
         self.log.debug("SWH snapshot ID: %s", hashutil.hash_to_hex(self.snapshot.id))
         self.flush()
@@ -466,5 +484,5 @@ class CvsLoader(BaseLoader):
             "status": load_status,
         }
 
-    def visit_status(self):
+    def visit_status(self) -> str:
         return self._visit_status

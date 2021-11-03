@@ -47,6 +47,7 @@
 import calendar
 import re
 import time
+from typing import BinaryIO, Dict, List, NamedTuple, Optional, Tuple
 
 from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey, file_path
 
@@ -66,17 +67,33 @@ from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey, file_path
 path_encodings = ["ascii", "utf-8"]
 
 
+class revtuple(NamedTuple):
+    number: str
+    date: int
+    author: bytes
+    state: str
+    branches: None
+    revnumstr: None
+    commitid: None
+
+
 class RlogConv:
-    def __init__(self, cvsroot_path, fuzzsec):
+    def __init__(self, cvsroot_path: str, fuzzsec: int) -> None:
         self.cvsroot_path = cvsroot_path
         self.fuzzsec = fuzzsec
-        self.changesets = dict()
-        self.tags = dict()
-        self.offsets = dict()
+        self.changesets: Dict[ChangeSetKey, ChangeSetKey] = dict()
+        self.tags: Dict[str, ChangeSetKey] = dict()
+        self.offsets: Dict[str, Dict[str, int]] = dict()
 
-    def _process_rlog_revisions(self, path, taginfo, revisions, logmsgs):
+    def _process_rlog_revisions(
+        self,
+        path: str,
+        taginfo: Dict[bytes, bytes],
+        revisions: Dict[str, revtuple],
+        logmsgs: Dict[str, Optional[bytes]]
+    ) -> None:
         """ Convert RCS revision history of a file into self.changesets items """
-        rtags = dict()
+        rtags: Dict[str, List[str]] = dict()
         # RCS and CVS represent branches by adding digits to revision numbers.
         # And CVS assigns special meaning to certain revision number ranges.
         #
@@ -119,25 +136,28 @@ class RlogConv:
         # before any files on this branch have been modified.
         # Even-numbered branch revisions appear once the file is modified.
         branches = {"1": "HEAD", "1.1.1": "VENDOR"}
-        for k, v in list(taginfo.items()):
-            r = v.split(".")
+
+        k: str
+        v_: str
+        for k, v_ in list(taginfo.items()):  # type: ignore  # FIXME, inconsistent types
+            r = v_.split(".")
             if len(r) == 3:
                 # vendor branch number
-                branches[v] = "VENDOR"
+                branches[v_] = "VENDOR"
             elif len(r) >= 3 and r[-2] == "0":
                 # magic branch number
                 branches[".".join(r[:-2] + r[-1:])] = k
             if len(r) == 2 and branches[r[0]] == "HEAD":
                 # main branch number
-                if v not in rtags:
-                    rtags[v] = list()
-                rtags[v].append(k)
+                if v_ not in rtags:
+                    rtags[v_] = list()
+                rtags[v_].append(k)
 
-        revs = revisions.items()
+        revs: List[Tuple[str, revtuple]] = list(revisions.items())
         # sort by revision descending to priorize 1.1.1.1 than 1.1
-        revs = sorted(revs, key=lambda a: a[1][0], reverse=True)
+        revs.sort(key=lambda a: a[1][0], reverse=True)
         # sort by time
-        revs = sorted(revs, key=lambda a: a[1][1])
+        revs.sort(key=lambda a: a[1][1])
         novendor = False
         have_initial_revision = False
         last_vendor_status = None
@@ -181,7 +201,9 @@ class RlogConv:
             # decode author name in a potentially lossy way;
             # it is only used for internal hashing in this case
             author = v[2].decode("utf-8", "ignore")
-            a = ChangeSetKey(branches[b], author, v[1], logmsgs[k], v[6], self.fuzzsec)
+            logmsg = logmsgs[k]
+            assert logmsg is not None
+            a = ChangeSetKey(branches[b], author, v[1], logmsg, v[6], self.fuzzsec)
 
             a.put_file(path, k, v[3], 0)
             while a in self.changesets:
@@ -195,12 +217,12 @@ class RlogConv:
                     if t not in self.tags or self.tags[t].max_time < a.max_time:
                         self.tags[t] = a
 
-    def parse_rlog(self, fp):
+    def parse_rlog(self, fp: BinaryIO) -> None:
         eof = None
         while eof != _EOF_LOG and eof != _EOF_ERROR:
             filename, branch, taginfo, lockinfo, errmsg, eof = _parse_log_header(fp)
-            revisions = {}
-            logmsgs = {}
+            revisions: Dict[str, revtuple] = {}
+            logmsgs: Dict[str, Optional[bytes]] = {}
             path = ""
             if filename:
                 # There is no known encoding of filenames in CVS.
@@ -231,10 +253,10 @@ class RlogConv:
 
             self._process_rlog_revisions(path, taginfo, revisions, logmsgs)
 
-    def getlog(self, fp, path, rev):
+    def getlog(self, fp: BinaryIO, path: str, rev: str) -> Optional[bytes]:
         off = self.offsets[path][rev]
         fp.seek(off)
-        rev, logmsg, eof = _parse_log_entry(fp)
+        _rev, logmsg, eof = _parse_log_entry(fp)
         return logmsg
 
 
@@ -274,7 +296,9 @@ _re_cvsnt_error = re.compile(
 )
 
 
-def _parse_log_header(fp):
+def _parse_log_header(fp: BinaryIO) -> Tuple[
+        bytes, bytes, Dict[bytes, bytes], Dict[bytes, bytes], bytes, Optional[bytes]
+]:
     """Parse and RCS/CVS log header.
 
   fp is a file (pipe) opened for reading the log information.
@@ -291,8 +315,8 @@ def _parse_log_header(fp):
   """
 
     filename = branch = msg = b""
-    taginfo = {}  # tag name => number
-    lockinfo = {}  # revision => locker
+    taginfo: Dict[bytes, bytes] = {}  # tag name => number
+    lockinfo: Dict[bytes, bytes] = {}  # revision => locker
     state = 0  # 0 = base, 1 = parsing symbols, 2 = parsing locks
     eof = None
 
@@ -347,7 +371,7 @@ def _parse_log_header(fp):
                     filename = p1 or p2 or p3
                     if not filename:
                         raise ValueError(
-                            "Could not get filename from CVSNT error:\n%s" % line
+                            "Could not get filename from CVSNT error:\n%r" % line
                         )
                     eof = _EOF_ERROR
                     break
@@ -384,7 +408,7 @@ def cvs_strptime(timestr):
         return time.strptime(timestr, "%Y-%m-%d %H:%M:%S %z")[:-1] + (0,)
 
 
-def _parse_log_entry(fp):
+def _parse_log_entry(fp) -> Tuple[Optional[revtuple], Optional[bytes], Optional[bytes]]:
     """Parse a single log entry.
 
   On entry, fp should point to the first line of the entry (the "revision"
@@ -392,7 +416,8 @@ def _parse_log_entry(fp):
   On exit, fp will have consumed the log separator line (dashes) or the
   end-of-file marker (equals).
 
-  Returns: Revision data tuple, and eof flag (see _EOF_*)
+  Returns: Revision data tuple (number string, date, author, state, branches, revnumstr,
+  commitid) if any, log, and eof flag (see _EOF_*)
   """
     rev = None
     line = fp.readline()
@@ -453,7 +478,7 @@ def _parse_log_entry(fp):
     # return a revision tuple compatible with 'rcsparse', the log message,
     # and the EOF marker
     return (
-        (
+        revtuple(
             rev.decode("ascii"),  # revision number string
             date,
             match.group(2),  # author (encoding is arbitrary; don't attempt to decode)

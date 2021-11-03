@@ -36,6 +36,8 @@ import re
 import subprocess
 import sys
 import time
+from typing import Dict, List, Optional, Tuple, TypeVar
+
 import swh.loader.cvs.rcsparse as rcsparse
 
 CHANGESET_FUZZ_SEC = 300
@@ -48,7 +50,7 @@ def usage():
           '\tcvsroot [git_dir]', file=sys.stderr)
 
 
-def main():
+def main() -> None:
     email_domain = None
     do_incremental = False
     git_tip = None
@@ -108,6 +110,7 @@ def main():
              'i18n.logOutputEncoding=UTF-8', 'log', '--max-count', '1',
              '--date=raw', '--format=%ae%n%ad%n%H', git_branch],
             encoding='utf-8', stdout=subprocess.PIPE)
+        assert git.stdout is not None
         outs = git.stdout.readlines()
         git.wait()
         if git.returncode != 0:
@@ -121,6 +124,7 @@ def main():
                  'i18n.logOutputEncoding=UTF-8', 'log', '--max-count', '1',
                  '--date=raw', '--format=%ae%n%ad%n%H', last_revision],
                 encoding='utf-8', stdout=subprocess.PIPE)
+            assert git.stdout is not None
             outs = git.stdout.readlines()
             git.wait()
             if git.returncode != 0:
@@ -182,11 +186,11 @@ def main():
         for i, e in enumerate(log_encodings):
             try:
                 how = 'ignore' if i == len(log_encodings) - 1 else 'strict'
-                log = log.decode(e, how)
+                log_str = log.decode(e, how)
                 break
             except UnicodeError:
                 pass
-        log = log.encode('utf-8', 'ignore')
+        log = log_str.encode('utf-8', 'ignore')
 
         output('commit refs/heads/' + git_branch)
         markseq = markseq + 1
@@ -229,7 +233,7 @@ def main():
 # is UTF-8.  Also write without conversion for a bytes object (file bodies
 # might be various encodings)
 #
-def output(*args, end='\n'):
+def output(*args, end='\n') -> None:
     if len(args) == 0:
         pass
     elif len(args) > 1 or isinstance(args[0], str):
@@ -243,7 +247,7 @@ def output(*args, end='\n'):
 
 
 class FileRevision:
-    def __init__(self, path, rev, state, markseq):
+    def __init__(self, path: str, rev: str, state: str, markseq: int) -> None:
         self.path = path
         self.rev = rev
         self.state = state
@@ -251,40 +255,50 @@ class FileRevision:
 
 
 class ChangeSetKey:
-    def __init__(self, branch, author, timestamp, log, commitid, fuzzsec):
+    def __init__(
+            self,
+            branch: str,
+            author,
+            timestamp: int,
+            log: bytes,
+            commitid: Optional[str],
+            fuzzsec: int
+    ) -> None:
         self.branch = branch
         self.author = author
         self.min_time = timestamp
         self.max_time = timestamp
         self.commitid = commitid
         self.fuzzsec = fuzzsec
-        self.revs = []
-        self.tags = []
+        self.revs: List[FileRevision] = []
+        self.tags: List[str] = []
         self.log_hash = 0
         h = 0
         for c in log:
             h = 31 * h + c
         self.log_hash = h
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> bool:
         return self._cmp(other) < 0
 
-    def __gt__(self, other):
+    def __gt__(self, other) -> bool:
         return self._cmp(other) > 0
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self._cmp(other) == 0
 
-    def __le__(self, other):
+    def __le__(self, other) -> bool:
         return self._cmp(other) <= 0
 
-    def __ge__(self, other):
+    def __ge__(self, other) -> bool:
         return self._cmp(other) >= 0
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return self._cmp(other) != 0
 
-    def _cmp(self, anon):
+    def _cmp(self, anon) -> int:
+        if not isinstance(anon, ChangeSetKey):
+            raise TypeError()
         # compare by the commitid
         cid = _cmp2(self.commitid, anon.commitid)
         if cid == 0 and self.commitid is not None:
@@ -313,35 +327,36 @@ class ChangeSetKey:
 
         return ct if ct != 0 else c
 
-    def merge(self, anot):
+    def merge(self, anot: "ChangeSetKey") -> None:
         self.max_time = max(self.max_time, anot.max_time)
         self.min_time = min(self.min_time, anot.min_time)
         self.revs.extend(anot.revs)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.branch + '/' + self.author) * 31 + self.log_hash
 
-    def put_file(self, path, rev, state, markseq):
+    def put_file(self, path: str, rev: str, state: str, markseq: int):
         self.revs.append(FileRevision(path, rev, state, markseq))
 
 
-def _cmp2(a, b):
+TCmp = TypeVar("TCmp", int, str)
+def _cmp2(a: Optional[TCmp], b: Optional[TCmp]) -> int:
     _a = a is not None
     _b = b is not None
-    return (a > b) - (a < b) if _a and _b else (_a > _b) - (_a < _b)
+    return (a > b) - (a < b) if _a and _b else (_a > _b) - (_a < _b)  # type: ignore
 
 
 class CvsConv:
-    def __init__(self, cvsroot, rcs, dumpfile, fuzzsec):
+    def __init__(self, cvsroot: str, rcs: "RcsKeywords", dumpfile: bool, fuzzsec: int) -> None:
         self.cvsroot = cvsroot
         self.rcs = rcs
-        self.changesets = dict()
+        self.changesets: Dict[ChangeSetKey, ChangeSetKey] = dict()
         self.dumpfile = dumpfile
         self.markseq = 0
-        self.tags = dict()
+        self.tags: Dict[str, ChangeSetKey] = dict()
         self.fuzzsec = fuzzsec
 
-    def walk(self, module=None):
+    def walk(self, module: Optional[str] =None) -> None:
         p = [self.cvsroot]
         if module is not None:
             p.append(module)
@@ -364,26 +379,26 @@ class CvsConv:
         for t, c in list(self.tags.items()):
             c.tags.append(t)
 
-    def parse_file(self, path):
-        rtags = dict()
+    def parse_file(self, path: str) -> None:
+        rtags: Dict[str, List[str]] = dict()
         rcsfile = rcsparse.rcsfile(path)
         branches = {'1': 'HEAD', '1.1.1': 'VENDOR'}
-        for k, v in list(rcsfile.symbols.items()):
-            r = v.split('.')
+        for k, v_ in list(rcsfile.symbols.items()):
+            r = v_.split('.')
             if len(r) == 3:
-                branches[v] = 'VENDOR'
+                branches[v_] = 'VENDOR'
             elif len(r) >= 3 and r[-2] == '0':
                 branches['.'.join(r[:-2] + r[-1:])] = k
             if len(r) == 2 and branches[r[0]] == 'HEAD':
-                if v not in rtags:
-                    rtags[v] = list()
-                rtags[v].append(k)
+                if v_ not in rtags:
+                    rtags[v_] = list()
+                rtags[v_].append(k)
 
-        revs = rcsfile.revs.items()
+        revs: List[Tuple[str, Tuple[str, int, str, str, List[str], str, str]]] = list(rcsfile.revs.items())
         # sort by revision descending to priorize 1.1.1.1 than 1.1
-        revs = sorted(revs, key=lambda a: a[1][0], reverse=True)
+        revs.sort(key=lambda a: a[1][0], reverse=True)
         # sort by time
-        revs = sorted(revs, key=lambda a: a[1][1])
+        revs.sort(key=lambda a: a[1][1])
         novendor = False
         have_initial_revision = False
         last_vendor_status = None
@@ -445,22 +460,22 @@ class CvsConv:
                         self.tags[t] = a
 
 
-def file_path(r, p):
+def file_path(r: str, p: str) -> str:
     if r.endswith('/'):
         r = r[:-1]
     if p[-2:] == ',v':
         path = p[:-2]               # drop ",v"
     else:
         path = p
-    p = path.split('/')
-    if len(p) > 0 and p[-2] == 'Attic':
-        path = '/'.join(p[:-2] + [p[-1]])
+    p_ = path.split('/')
+    if len(p_) > 0 and p_[-2] == 'Attic':
+        path = '/'.join(p_[:-2] + [p_[-1]])
     if path.startswith(r):
         path = path[len(r) + 1:]
     return path
 
 
-def git_dump_file(path, k, rcs, markseq):
+def git_dump_file(path: str, k, rcs, markseq) -> None:
     try:
         cont = rcs.expand_keyword(path, rcsparse.rcsfile(path), k)
     except RuntimeError as msg:
@@ -516,18 +531,18 @@ class RcsKeywords:
     RCS_KWEXP_DEFAULT = (RCS_KWEXP_NAME | RCS_KWEXP_VAL)
     RCS_KWEXP_KVL     = (RCS_KWEXP_NAME | RCS_KWEXP_VAL | RCS_KWEXP_LKR)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.rerecomple()
 
-    def rerecomple(self):
+    def rerecomple(self) -> None:
         pat = b'|'.join(list(self.rcs_expkw.keys()))
         self.re_kw = re.compile(b".*?\\$(" + pat + b")[\\$:]")
 
-    def add_id_keyword(self, keyword):
+    def add_id_keyword(self, keyword) -> None:
         self.rcs_expkw[keyword.encode('ascii')] = self.RCS_KW_ID
         self.rerecomple()
 
-    def kflag_get(self, flags):
+    def kflag_get(self, flags: Optional[str]) -> int:
         if flags is None:
             return self.RCS_KWEXP_DEFAULT
         fl = 0
@@ -550,7 +565,7 @@ class RcsKeywords:
                 fl |= self.RCS_KWEXP_ERR
         return fl
 
-    def expand_keyword(self, filename, rcs, r):
+    def expand_keyword(self, filename: str, rcs: rcsparse.rcsfile, r: str) -> bytes:
         rev = rcs.revs[r]
 
         mode = self.kflag_get(rcs.expand)
