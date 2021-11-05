@@ -53,10 +53,6 @@ DEFAULT_BRANCH = b"HEAD"
 TEMPORARY_DIR_PREFIX_PATTERN = "swh.loader.cvs."
 
 
-class Foo:
-    pass
-
-
 class CvsLoader(BaseLoader):
     """Swh cvs loader.
 
@@ -191,9 +187,7 @@ class CvsLoader(BaseLoader):
                 pass
 
     def process_cvs_changesets(
-        self,
-        cvs_changesets: List[ChangeSetKey],
-        use_rcsparse: bool,
+        self, cvs_changesets: List[ChangeSetKey], use_rcsparse: bool,
     ) -> Iterator[
         Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
     ]:
