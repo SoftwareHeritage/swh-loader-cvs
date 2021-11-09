@@ -46,6 +46,7 @@
 
 import calendar
 import re
+import string
 import time
 from typing import BinaryIO, Dict, List, NamedTuple, Optional, Tuple
 
@@ -74,7 +75,7 @@ class revtuple(NamedTuple):
     state: str
     branches: None
     revnumstr: None
-    commitid: None
+    commitid: Optional[str]
 
 
 class RlogConv:
@@ -413,6 +414,21 @@ def cvs_strptime(timestr):
         return time.strptime(timestr, "%Y-%m-%d %H:%M:%S %z")[:-1] + (0,)
 
 
+def _parse_commitid(commitid: bytes) -> Optional[str]:
+    s = commitid.decode("ascii").strip()
+    # Strip "commitid: " tag and the trailing semicolon.
+    s = s[len("commitid: ") : -len(";")]
+    # The commitid itself contains digit and ASCII letters only:
+    for c in s:
+        if (
+            c not in string.digits
+            and c not in string.ascii_lowercase
+            and c not in string.ascii_uppercase
+        ):
+            raise ValueError("invalid commitid")
+    return s
+
+
 def _parse_log_entry(fp) -> Tuple[Optional[revtuple], Optional[bytes], Optional[bytes]]:
     """Parse a single log entry.
 
@@ -480,6 +496,12 @@ def _parse_log_entry(fp) -> Tuple[Optional[revtuple], Optional[bytes], Optional[
             raise ValueError("invalid year")
     date = calendar.timegm(tm)
 
+    commitid = match.group(6) or None
+    if commitid:
+        parsed_commitid = _parse_commitid(commitid)
+    else:
+        parsed_commitid = None
+
     # return a revision tuple compatible with 'rcsparse', the log message,
     # and the EOF marker
     return (
@@ -492,7 +514,7 @@ def _parse_log_entry(fp) -> Tuple[Optional[revtuple], Optional[bytes], Optional[
             ),  # state, usually "Exp" or "dead"; non-ASCII data here would be weird
             None,  # TODO: branches of this rev
             None,  # TODO: revnumstr of previous rev
-            None,  # TODO: commitid
+            parsed_commitid,
         ),
         log,
         eof,

@@ -625,3 +625,87 @@ def test_loader_cvs_pserver_readded_file_in_attic(swh_storage, datadir, tmp_path
     }
 
     check_snapshot(DINO_SNAPSHOT, loader.storage)
+
+
+DINO_SNAPSHOT2 = Snapshot(
+    id=hash_to_bytes("a9d6ce0b4f22dc4fd752ad4c25ec9ea71ed568d7"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("150616a2a3206f00a73f2d6a017dde22c52e4a83"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+
+def test_loader_cvs_split_commits_by_commitid(swh_storage, datadir, tmp_path):
+    """Conversion of RCS history which needs to be split by commit ID"""
+    # This repository has some file revisions which use the same log message
+    # and can only be told apart by commit IDs. Without commit IDs, these commits
+    # would get merged into a single commit in our conversion result.
+    archive_name = "dino-commitid"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/dino"  # CVS module name
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT2.id,
+    )
+
+    check_snapshot(DINO_SNAPSHOT2, loader.storage)
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 18,
+        "directory": 36,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 18,
+        "skipped_content": 0,
+        "snapshot": 18,
+    }
+
+
+def test_loader_cvs_pserver_split_commits_by_commitid(swh_storage, datadir, tmp_path):
+    """Conversion via pserver which needs to be split by commit ID"""
+    # This repository has some file revisions which use the same log message
+    # and can only be told apart by commit IDs. Without commit IDs, these commits
+    # would get merged into a single commit in our conversion result.
+    archive_name = "dino-commitid"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/dino"  # CVS module name
+
+    # Ask our cvsclient to connect via the 'cvs server' command
+    repo_url = f"fake://{repo_url[7:]}"
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT2.id,
+    )
+
+    check_snapshot(DINO_SNAPSHOT2, loader.storage)
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 18,
+        "directory": 36,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 18,
+        "skipped_content": 0,
+        "snapshot": 18,
+    }
