@@ -271,8 +271,6 @@ class CVSClient:
                 raise CVSProtocolError("CVS server error: %s" % line)
             if line == b"ok\n":
                 break
-            elif line == b"M \n":
-                continue
             elif line[0:2] == b"M ":
                 rlog_output.write(line[2:])
             elif line[0:8] == b"MT text ":

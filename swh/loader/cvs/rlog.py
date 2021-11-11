@@ -350,7 +350,9 @@ def _parse_log_header(
                 state = 0
 
         if state == 0:
-            if line[:9] == b"RCS file:":
+            if line == "\n":
+                continue
+            elif line[:9] == b"RCS file:":
                 filename = line[10:-1]
             elif line[:5] == b"head:":
                 # head = line[6:-1]

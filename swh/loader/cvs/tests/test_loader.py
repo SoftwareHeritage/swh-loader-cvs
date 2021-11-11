@@ -709,3 +709,91 @@ def test_loader_cvs_pserver_split_commits_by_commitid(swh_storage, datadir, tmp_
         "skipped_content": 0,
         "snapshot": 18,
     }
+
+
+GREEK_SNAPSHOT6 = Snapshot(
+    id=hash_to_bytes("b4c9423b2711c181251deb458d4ab4a3172948ac"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("f317c720e1929fec0afce10e6a8cfd24ef76dfc7"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+
+def test_loader_cvs_empty_lines_in_log_message(swh_storage, datadir, tmp_path):
+    """Conversion of RCS history with empty lines in a log message"""
+    archive_name = "greek-repository6"
+    extracted_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, extracted_name, tmp_path)
+    repo_url += "/greek-tree"  # CVS module name
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, extracted_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT6.id,
+    )
+
+    check_snapshot(GREEK_SNAPSHOT6, loader.storage)
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 9,
+        "directory": 22,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 8,
+        "skipped_content": 0,
+        "snapshot": 8,
+    }
+
+
+def test_loader_cvs_pserver_empty_lines_in_log_message(swh_storage, datadir, tmp_path):
+    """Conversion via pserver with empty lines in a log message"""
+    archive_name = "greek-repository6"
+    extracted_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, extracted_name, tmp_path)
+    repo_url += "/greek-tree"  # CVS module name
+
+    # Ask our cvsclient to connect via the 'cvs server' command
+    repo_url = f"fake://{repo_url[7:]}"
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, extracted_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT6.id,
+    )
+
+    check_snapshot(GREEK_SNAPSHOT6, loader.storage)
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 9,
+        "directory": 22,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 8,
+        "skipped_content": 0,
+        "snapshot": 8,
+    }
