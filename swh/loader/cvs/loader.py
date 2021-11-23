@@ -137,6 +137,7 @@ class CvsLoader(BaseLoader):
         self, k: ChangeSetKey, f: FileRevision, rcsfile: rcsparse.rcsfile
     ) -> None:
         assert self.cvsroot_path
+        assert self.server_style_cvsroot
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.worktree_path, path)
         self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
@@ -151,7 +152,26 @@ class CvsLoader(BaseLoader):
             if not rcsfile:
                 rcsfile = rcsparse.rcsfile(f.path)
             rcs = RcsKeywords()
-            contents = rcs.expand_keyword(f.path, rcsfile, f.rev)
+
+            # We try our best to generate the same commit hashes over both pserver
+            # and rsync. To avoid differences in file content due to expansion of
+            # RCS keywords which contain absolute file paths (such as "Header"),
+            # attempt to expand such paths in the same way as a regular CVS server
+            # would expand them.
+            # Whether this will avoid content differences depends on pserver and
+            # rsync servers exposing the same server-side path to the CVS repository.
+            # However, this is the best we can do, and only matters if an origin can
+            # be fetched over both pserver and rsync. Each will still be treated as
+            # a distinct origin, but will hopefully point at the same SWH snapshot.
+            # In any case, an absolute path based on the origin URL looks nicer than
+            # an absolute path based on a temporary directory used by the CVS loader.
+            server_style_path = f.path.replace(
+                self.cvsroot_path, self.server_style_cvsroot
+            )
+            if server_style_path[0] != "/":
+                server_style_path = "/" + server_style_path
+
+            contents = rcs.expand_keyword(server_style_path, rcsfile, f.rev)
             os.makedirs(os.path.dirname(wtpath), exist_ok=True)
             outfile = open(wtpath, mode="wb")
             outfile.write(contents)
@@ -293,6 +313,7 @@ class CvsLoader(BaseLoader):
         if not url.path:
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
         self.cvs_module_name = os.path.basename(url.path)
+        self.server_style_cvsroot = os.path.dirname(url.path)
         os.mkdir(os.path.join(self.worktree_path, self.cvs_module_name))
         if url.scheme == "file" or url.scheme == "rsync":
             # local CVS repository conversion
