@@ -361,10 +361,10 @@ def test_loader_cvs_visit_pserver_no_eol(swh_storage, datadir, tmp_path):
 
 
 GREEK_SNAPSHOT4 = Snapshot(
-    id=hash_to_bytes("11673e2766654bd5fafb5119b418794230d48d6b"),
+    id=hash_to_bytes("26e943053ea9c5f961336a72328cac22026ed3b5"),
     branches={
         b"HEAD": SnapshotBranch(
-            target=hash_to_bytes("fe4a926d49d2af76e0025a8ba0b4ed159aec6829"),
+            target=hash_to_bytes("ed784aff0e0743244bb1f30ba21c8abcd0d460ab"),
             target_type=TargetType.REVISION,
         )
     },
@@ -395,14 +395,14 @@ def test_loader_cvs_visit_expand_id_keyword(swh_storage, datadir, tmp_path):
 
     stats = get_stats(loader.storage)
     assert stats == {
-        "content": 9,
-        "directory": 22,
+        "content": 12,
+        "directory": 31,
         "origin": 1,
         "origin_visit": 1,
         "release": 0,
-        "revision": 8,
+        "revision": 11,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 11,
     }
 
     check_snapshot(GREEK_SNAPSHOT4, loader.storage)
@@ -435,14 +435,14 @@ def test_loader_cvs_visit_pserver_expand_id_keyword(swh_storage, datadir, tmp_pa
 
     stats = get_stats(loader.storage)
     assert stats == {
-        "content": 9,
-        "directory": 22,
+        "content": 12,
+        "directory": 31,
         "origin": 1,
         "origin_visit": 1,
         "release": 0,
-        "revision": 8,
+        "revision": 11,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 11,
     }
 
     check_snapshot(GREEK_SNAPSHOT4, loader.storage)

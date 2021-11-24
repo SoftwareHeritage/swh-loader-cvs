@@ -30,6 +30,7 @@
 #   % git --git-dir /git/openbsd.git fast-import < openbsd2.dump
 #
 
+import copy
 import getopt
 import os
 import re
@@ -588,6 +589,7 @@ class RcsKeywords:
                 except ValueError:
                     break
                 prefix = line[:m.start(1) - 1]
+                next_match_segment = copy.deepcopy(line[dsign:])
                 line = line[dsign + 1:]
                 line0 += prefix
                 expbuf = ''
@@ -648,7 +650,14 @@ class RcsKeywords:
                 if (mode & self.RCS_KWEXP_NAME) != 0:
                     expbuf += '$'
                 line0 += expbuf[:255].encode('ascii')
-                m = self.re_kw.match(line)
+                m = self.re_kw.match(next_match_segment)
+                if m:
+                    line = next_match_segment
+                    if (mode & self.RCS_KWEXP_NAME) != 0 and line0[-1] == ord('$'):
+                        # There is another keyword on this line that needs expansion.
+                        # Avoid a double "$$" in the expanded string. This $ terminates
+                        # the previous keyword and marks the beginning of the next one.
+                        line0 = line0[:-1]
 
             ret += [line0 + line]
             if logbuf is not None:
