@@ -567,6 +567,14 @@ class RcsKeywords:
         return fl
 
     def expand_keyword(self, filename: str, rcs: rcsparse.rcsfile, r: str) -> bytes:
+        """
+        Check out a file with keywords expanded. Expansion rules are specific
+        to each keyword, and some cases specific to undocumented behaviour of CVS.
+        Our implementation does not expand some keywords (see comments in the code).
+        For a list of keywords and their expansion rules, see:
+        https://www.gnu.org/software/trans-coord/manual/cvs/cvs.html#Keyword-list
+        (also available in 'info cvs' if cvs is installed)
+        """
         rev = rcs.revs[r]
 
         mode = self.kflag_get(rcs.expand)
@@ -574,24 +582,26 @@ class RcsKeywords:
             return rcs.checkout(rev[0])
 
         ret = []
-        for line in rcs.checkout(rev[0]).split(b'\n'):
+        for line in rcs.checkout(rev[0]).splitlines(keepends=True):
             logbuf = None
             m = self.re_kw.match(line)
             if m is None:
                 # No RCS Keywords, use it as it is
-                ret += [line]
+                ret.append(line)
                 continue
 
             line0 = b''
             while m is not None:
+                logbuf = None
                 try:
                     dsign = m.end(1) + line[m.end(1):].index(b'$')
                 except ValueError:
+                    # No RCS Keywords, use it as it is
+                    ret.append(line)
                     break
                 prefix = line[:m.start(1) - 1]
                 next_match_segment = copy.deepcopy(line[dsign:])
                 line = line[dsign + 1:]
-                line0 += prefix
                 expbuf = ''
                 if (mode & self.RCS_KWEXP_NAME) != 0:
                     expbuf += '$'
@@ -622,6 +632,28 @@ class RcsKeywords:
                         expbuf += rev[3]
                         expbuf += " "
                     if (expkw & self.RCS_KW_LOG) != 0:
+                        # Unlike other keywords, the Log keyword expands over multiple lines.
+                        # The terminating '$' of the Log keyword appears on the line which
+                        # contains the log keyword itself. Then follow all log message lines,
+                        # and those lines are followed by content which follows the Log keyword.
+                        # For example, the line:
+                        #
+                        #    $Log$ content which follows
+                        #
+                        # must be expanded like this:
+                        #
+                        #   $Log: delta,v $
+                        #   Revision 1.2  2021/11/29 14:24:18  stsp
+                        #   log message line 1
+                        #   log message line 2
+                        #   content which follows
+                        #
+                        # If we did not trim the Log keyword's trailing "$" here then
+                        # the last line would read instead:
+                        #
+                        #   $ content which follows
+                        assert(next_match_segment[0] == ord('$'))
+                        next_match_segment = next_match_segment[1:]
                         p = prefix
                         expbuf += filename \
                             if (expkw & self.RCS_KW_FULLPATH) != 0 \
@@ -632,37 +664,45 @@ class RcsKeywords:
                                 rev[0], time.strftime(
                                     "%Y/%m/%d %H:%M:%S", time.gmtime(rev[1])),
                                 rev[2])).encode('ascii')
-                        for lline in rcs.getlog(rev[0]).rstrip().split(b'\n'):
-                            if len(lline) == 0:
-                                logbuf += p.rstrip() + b'\n'
-                            else:
-                                logbuf += p + lline.lstrip() + b'\n'
-                        if len(line) == 0:
-                            logbuf += p.rstrip()
-                        else:
-                            logbuf += p + line.lstrip()
-                        line = b''
+                        for lline in rcs.getlog(rev[0]).splitlines(keepends=True):
+                            logbuf += p + lline
                     if (expkw & self.RCS_KW_SOURCE) != 0:
                         expbuf += filename
                         expbuf += " "
                     if (expkw & (self.RCS_KW_NAME | self.RCS_KW_LOCKER)) != 0:
+                        # We do not expand Name and Locker keywords.
+                        # The Name keyword is only expanded when a file is checked
+                        # out with an explicit tag name .perhaps this will be needed
+                        # if the loader learns about CVS tags some day.
+                        # The Locker keyword only expands if the file is currently
+                        # locked via 'cvs admin -l', which is not part of the
+                        # information we want to preserve about source code.
                         expbuf += " "
                 if (mode & self.RCS_KWEXP_NAME) != 0:
                     expbuf += '$'
-                line0 += expbuf[:255].encode('ascii')
+                if logbuf is not None:
+                    ret.append(prefix + expbuf.encode('ascii') + b'\n' + logbuf)
+                else:
+                    line0 += prefix + expbuf[:255].encode('ascii')
                 m = self.re_kw.match(next_match_segment)
                 if m:
                     line = next_match_segment
-                    if (mode & self.RCS_KWEXP_NAME) != 0 and line0[-1] == ord('$'):
+                    if (mode & self.RCS_KWEXP_NAME) != 0 and (expkw & self.RCS_KW_LOG) == 0 and line0[-1] == ord('$'):
                         # There is another keyword on this line that needs expansion.
                         # Avoid a double "$$" in the expanded string. This $ terminates
                         # the previous keyword and marks the beginning of the next one.
                         line0 = line0[:-1]
-
-            ret += [line0 + line]
-            if logbuf is not None:
-                ret += [logbuf]
-        return b'\n'.join(ret)
+                elif logbuf is not None:
+                    # Trim whitespace from the beginning of text following the Log keyword.
+                    # But leave a lone trailing empty line as-is. Which seems inconsistent,
+                    # but testing suggests that this matches CVS's behaviour.
+                    if len(line) == 1 and line[0] == ord('\n'):
+                        ret.append(line0 + prefix + line)
+                    else:
+                        ret.append(line0 + prefix + line.lstrip())
+                else:
+                    ret.append(line0 + line)
+        return b''.join(ret)
 
 
 # ----------------------------------------------------------------------
