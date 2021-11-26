@@ -4,6 +4,7 @@
 # See top-level LICENSE file for more information
 
 import os
+from typing import Any, Dict
 
 from swh.loader.cvs.loader import CvsLoader
 from swh.loader.tests import (
@@ -797,3 +798,64 @@ def test_loader_cvs_pserver_empty_lines_in_log_message(swh_storage, datadir, tmp
         "skipped_content": 0,
         "snapshot": 8,
     }
+
+
+def get_head_revision_paths_info(loader: CvsLoader) -> Dict[bytes, Dict[str, Any]]:
+    assert loader.snapshot is not None
+    root_dir = loader.snapshot.branches[b"HEAD"].target
+    revision = loader.storage.revision_get([root_dir])[0]
+    assert revision is not None
+
+    paths = {}
+    for entry in loader.storage.directory_ls(revision.directory, recursive=True):
+        paths[entry["name"]] = entry
+    return paths
+
+
+def test_loader_cvs_with_header_keyword(swh_storage, datadir, tmp_path):
+    """Eventful conversion of history with Header keyword in a file"""
+    archive_name = "greek-repository7"
+    extracted_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, extracted_name, tmp_path)
+    repo_url += "/greek-tree"  # CVS module name
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, extracted_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    repo_url = f"fake://{repo_url[7:]}"
+    loader2 = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, extracted_name)
+    )
+
+    assert loader2.load() == {"status": "eventful"}
+
+    # We cannot verify the snapshot ID. It is unpredicable due to use of the $Header$
+    # RCS keyword which contains the temporary directory where the repository is stored.
+
+    expected_stats = {
+        "content": 9,
+        "directory": 22,
+        "origin": 2,
+        "origin_visit": 2,
+        "release": 0,
+        "revision": 8,
+        "skipped_content": 0,
+        "snapshot": 8,
+    }
+    stats = get_stats(loader.storage)
+    assert stats == expected_stats
+    stats = get_stats(loader2.storage)
+    assert stats == expected_stats
+
+    # Ensure that file 'alpha', which contains a $Header$ keyword,
+    # was imported with equal content via file:// and fake:// URLs.
+
+    paths = get_head_revision_paths_info(loader)
+    paths2 = get_head_revision_paths_info(loader2)
+
+    alpha = paths[b"greek-tree/alpha"]
+    alpha2 = paths2[b"greek-tree/alpha"]
+    assert alpha["sha1"] == alpha2["sha1"]
