@@ -278,7 +278,7 @@ def test_loader_cvs_visit_pserver(swh_storage, datadir, tmp_path):
     repo_url += "/runbaby"  # CVS module name
 
     # Ask our cvsclient to connect via the 'cvs server' command
-    repo_url = "fake://" + repo_url[7:]
+    repo_url = f"fake://{repo_url[7:]}"
 
     loader = CvsLoader(
         swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
@@ -329,7 +329,7 @@ def test_loader_cvs_visit_pserver_no_eol(swh_storage, datadir, tmp_path):
     repo_url += "/greek-tree"  # CVS module name
 
     # Ask our cvsclient to connect via the 'cvs server' command
-    repo_url = "fake://" + repo_url[7:]
+    repo_url = f"fake://{repo_url[7:]}"
 
     loader = CvsLoader(
         swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, extracted_name)
