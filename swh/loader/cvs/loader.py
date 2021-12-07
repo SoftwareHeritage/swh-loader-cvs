@@ -129,7 +129,7 @@ class CvsLoader(BaseLoader):
         else:
             parents = ()
         revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
-        self.log.debug("SWH revision ID: %s", hashutil.hash_to_hex(revision.id))
+        self.log.info("SWH revision ID: %s", hashutil.hash_to_hex(revision.id))
         self._last_revision = revision
         return (revision, swh_dir)
 
@@ -461,6 +461,11 @@ class CvsLoader(BaseLoader):
         try:
             data = next(self.swh_revision_gen)
         except StopIteration:
+            assert self._last_revision is not None
+            self.snapshot = self.generate_and_load_snapshot(self._last_revision)
+            self.log.info("SWH snapshot ID: %s", hashutil.hash_to_hex(self.snapshot.id))
+            self.flush()
+            self.loaded_snapshot_id = self.snapshot.id
             return False
         except Exception:
             self.log.exception("Exception in fetch_data:")
@@ -531,11 +536,7 @@ class CvsLoader(BaseLoader):
         self.storage.content_add(self._contents)
         self.storage.directory_add(self._directories)
         self.storage.revision_add(self._revisions)
-        assert self._last_revision is not None
-        self.snapshot = self.generate_and_load_snapshot(self._last_revision)
-        self.log.debug("SWH snapshot ID: %s", hashutil.hash_to_hex(self.snapshot.id))
         self.flush()
-        self.loaded_snapshot_id = self.snapshot.id
         self._skipped_contents = []
         self._contents = []
         self._directories = []

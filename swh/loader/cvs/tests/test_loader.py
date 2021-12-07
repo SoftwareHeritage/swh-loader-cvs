@@ -151,7 +151,7 @@ def test_loader_cvs_with_file_additions_and_deletions(swh_storage, datadir, tmp_
         "release": 0,
         "revision": 7,
         "skipped_content": 0,
-        "snapshot": 7,
+        "snapshot": 1,
     }
 
     check_snapshot(GREEK_SNAPSHOT, loader.storage)
@@ -188,7 +188,7 @@ def test_loader_cvs_pserver_with_file_additions_and_deletions(
         "release": 0,
         "revision": 7,
         "skipped_content": 0,
-        "snapshot": 7,
+        "snapshot": 1,
     }
 
     check_snapshot(GREEK_SNAPSHOT, loader.storage)
@@ -230,7 +230,7 @@ def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 7,
         "skipped_content": 0,
-        "snapshot": 7,
+        "snapshot": 1,
     }
 
     archive_name2 = "greek-repository2"
@@ -261,7 +261,7 @@ def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 8,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 2,
     }
 
     check_snapshot(GREEK_SNAPSHOT2, loader.storage)
@@ -354,7 +354,7 @@ def test_loader_cvs_visit_pserver_no_eol(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 8,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 1,
     }
 
     check_snapshot(GREEK_SNAPSHOT3, loader.storage)
@@ -402,7 +402,7 @@ def test_loader_cvs_visit_expand_id_keyword(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 11,
         "skipped_content": 0,
-        "snapshot": 11,
+        "snapshot": 1,
     }
 
     check_snapshot(GREEK_SNAPSHOT4, loader.storage)
@@ -442,7 +442,7 @@ def test_loader_cvs_visit_pserver_expand_id_keyword(swh_storage, datadir, tmp_pa
         "release": 0,
         "revision": 11,
         "skipped_content": 0,
-        "snapshot": 11,
+        "snapshot": 1,
     }
 
     check_snapshot(GREEK_SNAPSHOT4, loader.storage)
@@ -490,7 +490,7 @@ def test_loader_cvs_with_file_deleted_and_readded(swh_storage, datadir, tmp_path
         "release": 0,
         "revision": 8,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 1,
     }
 
     check_snapshot(GREEK_SNAPSHOT5, loader.storage)
@@ -532,7 +532,7 @@ def test_loader_cvs_pserver_with_file_deleted_and_readded(
         "release": 0,
         "revision": 8,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 1,
     }
 
     check_snapshot(GREEK_SNAPSHOT5, loader.storage)
@@ -580,7 +580,7 @@ def test_loader_cvs_readded_file_in_attic(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 35,
         "skipped_content": 0,
-        "snapshot": 35,
+        "snapshot": 1,
     }
 
     check_snapshot(DINO_SNAPSHOT, loader.storage)
@@ -622,7 +622,7 @@ def test_loader_cvs_pserver_readded_file_in_attic(swh_storage, datadir, tmp_path
         "release": 0,
         "revision": 35,
         "skipped_content": 0,
-        "snapshot": 35,
+        "snapshot": 1,
     }
 
     check_snapshot(DINO_SNAPSHOT, loader.storage)
@@ -670,7 +670,7 @@ def test_loader_cvs_split_commits_by_commitid(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 18,
         "skipped_content": 0,
-        "snapshot": 18,
+        "snapshot": 1,
     }
 
 
@@ -708,7 +708,7 @@ def test_loader_cvs_pserver_split_commits_by_commitid(swh_storage, datadir, tmp_
         "release": 0,
         "revision": 18,
         "skipped_content": 0,
-        "snapshot": 18,
+        "snapshot": 1,
     }
 
 
@@ -756,7 +756,7 @@ def test_loader_cvs_empty_lines_in_log_message(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 8,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 1,
     }
 
 
@@ -796,7 +796,7 @@ def test_loader_cvs_pserver_empty_lines_in_log_message(swh_storage, datadir, tmp
         "release": 0,
         "revision": 8,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 1,
     }
 
 
@@ -843,7 +843,7 @@ def test_loader_cvs_with_header_keyword(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 8,
         "skipped_content": 0,
-        "snapshot": 8,
+        "snapshot": 1,
     }
     stats = get_stats(loader.storage)
     assert stats == expected_stats
@@ -905,7 +905,7 @@ def test_loader_cvs_expand_log_keyword(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 11,
         "skipped_content": 0,
-        "snapshot": 11,
+        "snapshot": 1,
     }
 
 
@@ -945,5 +945,5 @@ def test_loader_cvs_pserver_expand_log_keyword(swh_storage, datadir, tmp_path):
         "release": 0,
         "revision": 11,
         "skipped_content": 0,
-        "snapshot": 11,
+        "snapshot": 1,
     }
