@@ -947,3 +947,51 @@ def test_loader_cvs_pserver_expand_log_keyword(swh_storage, datadir, tmp_path):
         "skipped_content": 0,
         "snapshot": 1,
     }
+
+
+GREEK_SNAPSHOT9 = Snapshot(
+    id=hash_to_bytes("3d08834666df7a589abea07ac409771ebe7e8fe4"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("9971cbb3b540dfe75f3bcce5021cb73d63b47df3"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+
+def test_loader_cvs_visit_expand_custom_keyword(swh_storage, datadir, tmp_path):
+    """Visit to CVS repository with file with a custom RCS keyword"""
+    archive_name = "greek-repository9"
+    extracted_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, extracted_name, tmp_path)
+    repo_url += "/greek-tree"  # CVS module name
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, extracted_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT9.id,
+    )
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 9,
+        "directory": 14,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 8,
+        "skipped_content": 0,
+        "snapshot": 1,
+    }
+
+    check_snapshot(GREEK_SNAPSHOT9, loader.storage)

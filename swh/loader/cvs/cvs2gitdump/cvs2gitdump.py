@@ -478,7 +478,7 @@ def file_path(r: str, p: str) -> str:
 
 def git_dump_file(path: str, k, rcs, markseq) -> None:
     try:
-        cont = rcs.expand_keyword(path, rcsparse.rcsfile(path), k)
+        cont = rcs.expand_keyword(path, rcsparse.rcsfile(path), k, [])
     except RuntimeError as msg:
         print('Unexpected runtime error on parsing',
               path, k, ':', msg, file=sys.stderr)
@@ -566,7 +566,7 @@ class RcsKeywords:
                 fl |= self.RCS_KWEXP_ERR
         return fl
 
-    def expand_keyword(self, filename: str, rcs: rcsparse.rcsfile, r: str) -> bytes:
+    def expand_keyword(self, filename: str, rcs: rcsparse.rcsfile, r: str, excluded_keywords: List[str]) -> bytes:
         """
         Check out a file with keywords expanded. Expansion rules are specific
         to each keyword, and some cases specific to undocumented behaviour of CVS.
@@ -601,11 +601,25 @@ class RcsKeywords:
                     break
                 prefix = line[:m.start(1) - 1]
                 next_match_segment = copy.deepcopy(line[dsign:])
-                line = line[dsign + 1:]
                 expbuf = ''
+                try:
+                    kwname = m.group(1).decode('ascii')
+                except UnicodeDecodeError:
+                    # Not a valid RCS keyword, use it as it is
+                    ret.append(line)
+                    break
+                if kwname in excluded_keywords:
+                    line0 += prefix + m.group(1)
+                    m = self.re_kw.match(next_match_segment)
+                    if m:
+                        line = next_match_segment
+                        continue
+                    else:
+                        ret.append(line0 + line[dsign + 1:])
+                        break
+                line = line[dsign + 1:]
                 if (mode & self.RCS_KWEXP_NAME) != 0:
-                    expbuf += '$'
-                    expbuf += m.group(1).decode('ascii')
+                    expbuf += '$%s' % kwname
                     if (mode & self.RCS_KWEXP_VAL) != 0:
                         expbuf += ': '
                 if (mode & self.RCS_KWEXP_VAL) != 0:

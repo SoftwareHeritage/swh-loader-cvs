@@ -104,6 +104,8 @@ class CvsLoader(BaseLoader):
         self._visit_status = "full"
         self.visit_date = visit_date
         self.cvsroot_path = cvsroot_path
+        self.custom_id_keyword = None
+        self.excluded_keywords: List[str] = []
 
         self.snapshot: Optional[Snapshot] = None
         self.last_snapshot: Optional[Snapshot] = snapshot_get_latest(
@@ -171,7 +173,11 @@ class CvsLoader(BaseLoader):
             if server_style_path[0] != "/":
                 server_style_path = "/" + server_style_path
 
-            contents = rcs.expand_keyword(server_style_path, rcsfile, f.rev)
+            if self.custom_id_keyword is not None:
+                rcs.add_id_keyword(self.custom_id_keyword)
+            contents = rcs.expand_keyword(
+                server_style_path, rcsfile, f.rev, self.excluded_keywords
+            )
             os.makedirs(os.path.dirname(wtpath), exist_ok=True)
             outfile = open(wtpath, mode="wb")
             outfile.write(contents)
@@ -266,6 +272,47 @@ class CvsLoader(BaseLoader):
     def cleanup(self) -> None:
         self.log.info("cleanup")
 
+    def configure_custom_id_keyword(self, cvsconfig):
+        """Parse CVSROOT/config and look for a custom keyword definition.
+        There are two different configuration directives in use for this purpose.
+
+        The first variant stems from a patch which was never accepted into
+        upstream CVS and uses the tag directive: tag=MyName
+        With this, the "MyName" keyword becomes an alias for the "Id" keyword.
+        This variant is prelevant in CVS versions shipped on BSD.
+
+        The second variant stems from upstream CVS 1.12 and looks like:
+        LocalKeyword=MyName=SomeKeyword
+        KeywordExpand=iMyName
+        We only support "SomeKeyword" if it specifies "Id" or "CVSHeader", for now.
+        The KeywordExpand directive can be used to suppress expansion of keywords
+        by listing keywords after an initial "e" character ("exclude", as opposed
+        to an "include" list which uses an initial "i" character).
+        For example, this disables expansion of the Date and Name keywords:
+        KeywordExpand=eDate,Name
+        """
+        for line in cvsconfig.readlines():
+            line = line.strip()
+            try:
+                (config_key, value) = line.split("=", 1)
+            except ValueError:
+                continue
+            config_key = config_key.strip()
+            value = value.strip()
+            if config_key == "tag":
+                self.custom_id_keyword = value
+            elif config_key == "LocalKeyword":
+                try:
+                    (custom_kwname, kwname) = value.split("=", 1)
+                except ValueError:
+                    continue
+                if kwname.strip() in ("Id", "CVSHeader"):
+                    self.custom_id_keyword = custom_kwname.strip()
+            elif config_key == "KeywordExpand" and value.startswith("e"):
+                excluded_keywords = value[1:].split(",")
+                for k in excluded_keywords:
+                    self.excluded_keywords.append(k.strip())
+
     def fetch_cvs_repo_with_rsync(self, host: str, path: str) -> None:
         # URL *must* end with a trailing slash in order to get CVSROOT listed
         url = "rsync://%s%s/" % (host, os.path.dirname(path))
@@ -288,12 +335,17 @@ class CvsLoader(BaseLoader):
         if not have_cvsroot:
             raise NotFound("No CVSROOT directory found at %s" % url)
 
+        # Fetch the CVSROOT directory and the desired CVS module.
         assert self.cvsroot_path
-        subprocess.run(
-            # Ensure that rsync will place files directly within our cvsroot
-            # directory by appending a "/" to our cvsroot path.
-            ["rsync", "-a", url, self.cvsroot_path + "/"]
-        ).check_returncode()
+        for d in ("CVSROOT", self.cvs_module_name):
+            target_dir = os.path.join(self.cvsroot_path, d)
+            os.makedirs(target_dir, exist_ok=True)
+            subprocess.run(
+                # Append trailing path separators ("/" in the URL and os.path.sep in the
+                # local target directory path) to ensure that rsync will place files
+                # directly within our target directory .
+                ["rsync", "-a", url + d + "/", target_dir + os.path.sep]
+            ).check_returncode()
 
     def prepare(self) -> None:
         self._last_revision = None
@@ -360,6 +412,14 @@ class CvsLoader(BaseLoader):
                     "we might be ingesting an incomplete copy of the repository",
                     self.cvsroot_path,
                 )
+
+            # The file CVSROOT/config will usually contain ASCII data only.
+            # We allow UTF-8 just in case. Other encodings may result in an
+            # error and will require manual intervention, for now.
+            cvsconfig_path = os.path.join(self.cvsroot_path, "CVSROOT", "config")
+            cvsconfig = open(cvsconfig_path, mode="r", encoding="utf-8")
+            self.configure_custom_id_keyword(cvsconfig)
+            cvsconfig.close()
 
             # Unfortunately, there is no way to convert CVS history in an
             # iterative fashion because the data is not indexed by any kind
