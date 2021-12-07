@@ -16,6 +16,7 @@ The CVS loader can access CVS repositories via rsync or via the CVS
 pserver protocol, with optional support for tunnelling pserver via SSH.
 
 The CVS loader does *not* require the cvs program to be installed.
+However, the loader's test suite does require cvs to be installed.
 
 Access via rsync requires the rsync program to be installed. The CVS
 loader will then invoke rsync to obtain a temporary local copy of the
@@ -162,6 +163,8 @@ swh/loader/cvs/rlog.py
 Running Tests
 =============
 
+The loader's test suite requires cvs to be installed.
+
 Because the rcsparse library is implemented in C and accessed via Python
 bindings, the CVS loader must be compiled and installed before tests can
 be run and the *build* directory must be passed as an argument to
@@ -171,6 +174,23 @@ pytest:
 
    $ ./setup.py build install
    $ pytest ./build
+
+The test suite uses internal protocol schemes which cannot be reached
+from "Save Code Now". These are:
+
+ - fake://
+ - file://
+
+The fake:// scheme corresponds to pserver:// and ssh://. The test suite
+will spawn a 'cvs server' process locally and the loader will connect
+to this server via a pipe and communicate using the pserver protocol.
+Real ssh:// access lacks test coverage at present and would require
+sshd to become part of the test setup.
+
+The file:// scheme corresponds to rsync:// and behaves as if the rsync
+program had already created a local copy of the repository. Real rsync://
+access lacks test coverage at present and would require an rsyncd server
+to become part of the test setup.
 
 CLI run
 =======
