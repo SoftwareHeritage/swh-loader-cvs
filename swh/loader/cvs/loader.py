@@ -139,7 +139,7 @@ class CvsLoader(BaseLoader):
         assert self.cvsroot_path
         assert self.server_style_cvsroot
         path = file_path(self.cvsroot_path, f.path)
-        wtpath = os.path.join(self.worktree_path, path)
+        wtpath = os.path.join(self.tempdir_path, path)
         self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
         if f.state == "dead":
             # remove this file from work tree
@@ -182,7 +182,7 @@ class CvsLoader(BaseLoader):
     ):
         assert self.cvsroot_path
         path = file_path(self.cvsroot_path, f.path)
-        wtpath = os.path.join(self.worktree_path, path)
+        wtpath = os.path.join(self.tempdir_path, path)
         self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
         if f.state == "dead":
             # remove this file from work tree
@@ -288,17 +288,16 @@ class CvsLoader(BaseLoader):
         if not have_cvsroot:
             raise NotFound("No CVSROOT directory found at %s" % url)
 
-        # mypy complains: List item 3 has incompatible type "Optional[str]";
-        # because self.cvsroot_path is an optional argument. We do however
-        # ensure that it is initialized if the loader is not passed a
-        # corresponding argument. Better ideas than ignoring types on this line?
+        assert self.cvsroot_path
         subprocess.run(
-            ["rsync", "-a", url, self.cvsroot_path]  # type: ignore
+            # Ensure that rsync will place files directly within our cvsroot
+            # directory by appending a "/" to our cvsroot path.
+            ["rsync", "-a", url, self.cvsroot_path + "/"]
         ).check_returncode()
 
     def prepare(self) -> None:
         self._last_revision = None
-        self.worktree_path = tempfile.mkdtemp(
+        self.tempdir_path = tempfile.mkdtemp(
             suffix="-%s" % os.getpid(),
             prefix=TEMPORARY_DIR_PREFIX_PATTERN,
             dir=self.temp_directory,
@@ -314,7 +313,7 @@ class CvsLoader(BaseLoader):
             raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
         self.cvs_module_name = os.path.basename(url.path)
         self.server_style_cvsroot = os.path.dirname(url.path)
-        os.mkdir(os.path.join(self.worktree_path, self.cvs_module_name))
+        self.worktree_path = os.path.join(self.tempdir_path, self.cvs_module_name)
         if url.scheme == "file" or url.scheme == "rsync":
             # local CVS repository conversion
             if not self.cvsroot_path:
