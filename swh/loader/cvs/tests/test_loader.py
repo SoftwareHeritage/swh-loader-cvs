@@ -995,3 +995,89 @@ def test_loader_cvs_visit_expand_custom_keyword(swh_storage, datadir, tmp_path):
     }
 
     check_snapshot(GREEK_SNAPSHOT9, loader.storage)
+
+
+RCSBASE_SNAPSHOT = Snapshot(
+    id=hash_to_bytes("2c75041ba8868df04349c1c8f4c29f992967b8aa"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("46f076387ff170dc3d4da5e43d953c1fc744c821"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+
+def test_loader_cvs_expand_log_keyword2(swh_storage, datadir, tmp_path):
+    """Another conversion of RCS history with Log keyword in files"""
+    archive_name = "rcsbase-log-kw-test-repo"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/src"  # CVS module name
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=RCSBASE_SNAPSHOT.id,
+    )
+
+    check_snapshot(RCSBASE_SNAPSHOT, loader.storage)
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 2,
+        "directory": 3,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 3,
+        "skipped_content": 0,
+        "snapshot": 1,
+    }
+
+
+def test_loader_cvs_pserver_expand_log_keyword2(swh_storage, datadir, tmp_path):
+    """Another conversion of RCS history with Log keyword in files"""
+    archive_name = "rcsbase-log-kw-test-repo"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/src"  # CVS module name
+
+    # Ask our cvsclient to connect via the 'cvs server' command
+    repo_url = f"fake://{repo_url[7:]}"
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=RCSBASE_SNAPSHOT.id,
+    )
+
+    check_snapshot(RCSBASE_SNAPSHOT, loader.storage)
+
+    stats = get_stats(loader.storage)
+    assert stats == {
+        "content": 2,
+        "directory": 3,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 3,
+        "skipped_content": 0,
+        "snapshot": 1,
+    }

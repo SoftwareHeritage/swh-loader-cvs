@@ -652,34 +652,36 @@ class RcsKeywords:
                         # and those lines are followed by content which follows the Log keyword.
                         # For example, the line:
                         #
-                        #    $Log$ content which follows
+                        #    foo $Log$content which follows
                         #
-                        # must be expanded like this:
+                        # will be expanded like this by CVS:
                         #
-                        #   $Log: delta,v $
-                        #   Revision 1.2  2021/11/29 14:24:18  stsp
-                        #   log message line 1
-                        #   log message line 2
-                        #   content which follows
+                        #   foo $Log: delta,v $
+                        #   foo Revision 1.2  2021/11/29 14:24:18  stsp
+                        #   foo log message line 1
+                        #   foo log message line 2
+                        #   foocontent which follows
+                        #
+                        # (Side note: Trailing whitespace is stripped from "foo " when
+                        # the content which follows gets written to the output file.)
                         #
                         # If we did not trim the Log keyword's trailing "$" here then
                         # the last line would read instead:
                         #
-                        #   $ content which follows
+                        #   foo$content which follows
                         assert(next_match_segment[0] == ord('$'))
                         next_match_segment = next_match_segment[1:]
-                        p = prefix
                         expbuf += filename \
                             if (expkw & self.RCS_KW_FULLPATH) != 0 \
                             else os.path.basename(filename)
                         expbuf += " "
-                        logbuf = p + (
+                        logbuf = prefix + (
                             'Revision %s  %s  %s\n' % (
                                 rev[0], time.strftime(
                                     "%Y/%m/%d %H:%M:%S", time.gmtime(rev[1])),
                                 rev[2])).encode('ascii')
                         for lline in rcs.getlog(rev[0]).splitlines(keepends=True):
-                            logbuf += p + lline
+                            logbuf += prefix + lline
                     if (expkw & self.RCS_KW_SOURCE) != 0:
                         expbuf += filename
                         expbuf += " "
@@ -707,13 +709,10 @@ class RcsKeywords:
                         # the previous keyword and marks the beginning of the next one.
                         line0 = line0[:-1]
                 elif logbuf is not None:
-                    # Trim whitespace from the beginning of text following the Log keyword.
-                    # But leave a lone trailing empty line as-is. Which seems inconsistent,
-                    # but testing suggests that this matches CVS's behaviour.
-                    if len(line) == 1 and line[0] == ord('\n'):
-                        ret.append(line0 + prefix + line)
-                    else:
-                        ret.append(line0 + prefix + line.lstrip())
+                    # Trim whitespace from tail of prefix if appending a suffix which
+                    # followed the Log keyword on the same line.
+                    # Testing suggests that this matches CVS's behaviour.
+                    ret.append(line0 + prefix.rstrip() + line)
                 else:
                     ret.append(line0 + line)
         return b''.join(ret)
