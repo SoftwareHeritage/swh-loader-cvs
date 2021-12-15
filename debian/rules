@@ -1,0 +1,7 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME=swh.loader.cvs
+export PYBUILD_TEST_ARGS=-vv
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild

@@ -1,0 +1,29 @@
+Source: swh-loader-cvs
+Maintainer: Software Heritage developers <swh-devel@inria.fr>
+Section: python
+Priority: optional
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-python (>= 3),
+ python3-all,
+ python3-pytest,
+ python3-setuptools,
+ python3-setuptools-scm,
+ python3-swh.core (>= 0.3),
+ python3-swh.loader.core (>= 0.18),
+ python3-swh.model (>= 0.4.0),
+ python3-swh.scheduler (>= 0.0.39),
+ python3-swh.storage (>= 0.11.3),
+# The above dependencies are automatically generated. Add extra dependencies below:
+ cvs,
+ python3-swh.core.db.pytestplugin,
+ python3-all-dev,
+Rules-Requires-Root: no
+Standards-Version: 4.6.0
+Homepage: https://forge.softwareheritage.org/source/swh-loader-cvs
+
+Package: python3-swh.loader.cvs
+Architecture: any
+Depends: ${misc:Depends}, ${python3:Depends},
+ ${shlibs:Depends},
+Description: Software Heritage CVS Loader

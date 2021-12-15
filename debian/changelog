@@ -1,0 +1,5 @@
+swh-loader-cvs (0.0.2-1~swh1) unstable-swh; urgency=medium
+
+  * Initial release
+
+ -- Nicolas Dandrimont <nicolas@dandrimont.eu>  Wed, 15 Dec 2021 10:50:25 +0100
