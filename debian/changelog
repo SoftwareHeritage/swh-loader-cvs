@@ -1,3 +1,10 @@
+swh-loader-cvs (0.0.2-2~swh1) unstable-swh; urgency=medium
+
+  * Add missing dh_install override to avoid stomping on the namespace
+    __init__.py
+
+ -- Nicolas Dandrimont <olasd@debian.org>  Wed, 15 Dec 2021 15:43:29 +0100
+
 swh-loader-cvs (0.0.2-1~swh1) unstable-swh; urgency=medium
 
   * Initial release
