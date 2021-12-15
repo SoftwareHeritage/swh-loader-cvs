@@ -1,8 +1,9 @@
-swh-loader-cvs (0.0.2-1~swh1~bpo10+1) buster-swh; urgency=medium
+swh-loader-cvs (0.0.2-2~swh1) unstable-swh; urgency=medium
 
-  * Rebuild for buster-swh
+  * Add missing dh_install override to avoid stomping on the namespace
+    __init__.py
 
- -- Software Heritage autobuilder (on jenkins-debian1) <jenkins@jenkins-debian1.internal.softwareheritage.org>  Wed, 15 Dec 2021 14:36:11 +0000
+ -- Nicolas Dandrimont <olasd@debian.org>  Wed, 15 Dec 2021 15:43:29 +0100
 
 swh-loader-cvs (0.0.2-1~swh1) unstable-swh; urgency=medium
 
