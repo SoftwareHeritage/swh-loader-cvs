@@ -24,12 +24,7 @@ def convert_to_datetime(date: Optional[str]) -> Optional[datetime]:
 
 @shared_task(name=__name__ + ".LoadCvsRepository")
 def load_cvs(
-    *,
-    url: str,
-    origin_url: Optional[str] = None,
-    destination_path: Optional[str] = None,
-    swh_revision: Optional[str] = None,
-    visit_date: Optional[str] = None,
+    *, url: str, origin_url: Optional[str] = None, visit_date: Optional[str] = None,
 ):
     """Import a CVS repository
 
@@ -37,18 +32,9 @@ def load_cvs(
         - url: (mandatory) CVS's repository url to ingest data from
         - origin_url: Optional original url override to use as origin reference
             in the archive. If not provided, "url" is used as origin.
-        - destination_path: (optional) root directory to
-          locally retrieve svn's data
-        - swh_revision: (optional) extra revision hex to
-          start from. See swh.loader.svn.CvsLoader.process
-          docstring
         - visit_date: Optional date to override the visit date
     """
     loader = CvsLoader.from_configfile(
-        url=url,
-        origin_url=origin_url,
-        destination_path=destination_path,
-        swh_revision=swh_revision,
-        visit_date=convert_to_datetime(visit_date),
+        url=url, origin_url=origin_url, visit_date=convert_to_datetime(visit_date),
     )
     return loader.load()
