@@ -23,3 +23,21 @@ from swh.loader.cvs.tasks import convert_to_datetime
 )
 def test_convert_to_datetime(date, expected_result):
     assert convert_to_datetime(date) == expected_result
+
+
+def test_cvs_loader(
+    mocker, swh_scheduler_celery_app, swh_scheduler_celery_worker, swh_config
+):
+    mock_loader = mocker.patch("swh.loader.cvs.loader.CvsLoader.load")
+    mock_loader.return_value = {"status": "eventful"}
+
+    res = swh_scheduler_celery_app.send_task(
+        "swh.loader.cvs.tasks.LoadCvsRepository",
+        kwargs=dict(url="some-technical-url", origin_url="origin-url"),
+    )
+    assert res
+    res.wait()
+    assert res.successful()
+
+    assert res.result == {"status": "eventful"}
+    assert mock_loader.called

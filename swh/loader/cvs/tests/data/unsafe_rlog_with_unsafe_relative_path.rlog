@@ -1,0 +1,103 @@
+RCS file: {cvsroot_path}/../greek-tree/alpha,v
+head: 1.2
+branch:
+locks: strict
+access list:
+symbolic names:
+	start: 1.1.1.1
+	yoyo: 1.1.1
+keyword substitution: kv
+total revisions: 3;	selected revisions: 3
+description:
+----------------------------
+revision 1.2
+date: 2021-04-20 15:30:37 +0200;  author: stsp;  state: Exp;  lines: +1 -0;  commitid: 100607ED77A971503F5;
+edit alpha
+----------------------------
+revision 1.1
+date: 2021-04-20 15:29:48 +0200;  author: stsp;  state: Exp;  commitid: 100607ED74996F4C8AF;
+branches:  1.1.1;
+Initial revision
+----------------------------
+revision 1.1.1.1
+date: 2021-04-20 15:29:48 +0200;  author: stsp;  state: Exp;  lines: +0 -0;  commitid: 100607ED74996F4C8AF;
+initial import
+=============================================================================
+
+RCS file: {cvsroot_path}/greek-tree/Attic/../beta,v
+head: 1.2
+branch:
+locks: strict
+access list:
+symbolic names:
+	start: 1.1.1.1
+	yoyo: 1.1.1
+keyword substitution: kv
+total revisions: 3;	selected revisions: 3
+description:
+----------------------------
+revision 1.2
+date: 2021-04-20 15:30:52 +0200;  author: stsp;  state: dead;  lines: +0 -0;  commitid: 100607ED78A9726BA11;
+remove beta
+----------------------------
+revision 1.1
+date: 2021-04-20 15:29:48 +0200;  author: stsp;  state: Exp;  commitid: 100607ED74996F4C8AF;
+branches:  1.1.1;
+Initial revision
+----------------------------
+revision 1.1.1.1
+date: 2021-04-20 15:29:48 +0200;  author: stsp;  state: Exp;  lines: +0 -0;  commitid: 100607ED74996F4C8AF;
+initial import
+=============================================================================
+
+RCS file: {cvsroot_path}/../../etc/passwd
+head: 1.3
+branch:
+locks: strict
+access list:
+symbolic names:
+	start: 1.1.1.1
+	yoyo: 1.1.1
+keyword substitution: kv
+total revisions: 4;	selected revisions: 4
+description:
+----------------------------
+revision 1.3
+date: 2021-04-20 15:32:45 +0200;  author: stsp;  state: Exp;  lines: +1 -1;  commitid: 100607ED7F29770C997;
+reviving zeta
+----------------------------
+revision 1.2
+date: 2021-04-20 15:31:57 +0200;  author: stsp;  state: dead;  lines: +0 -0;  commitid: 100607ED7C89753114E;
+remove epsilon/zeta
+----------------------------
+revision 1.1
+date: 2021-04-20 15:29:48 +0200;  author: stsp;  state: Exp;  commitid: 100607ED74996F4C8AF;
+branches:  1.1.1;
+Initial revision
+----------------------------
+revision 1.1.1.1
+date: 2021-04-20 15:29:48 +0200;  author: stsp;  state: Exp;  lines: +0 -0;  commitid: 100607ED74996F4C8AF;
+initial import
+=============================================================================
+
+RCS file: {cvsroot_path}/greek-tree/gamma/../../../../../../etc/passwd
+head: 1.1
+branch: 1.1.1
+locks: strict
+access list:
+symbolic names:
+	start: 1.1.1.1
+	yoyo: 1.1.1
+keyword substitution: kv
+total revisions: 2;	selected revisions: 2
+description:
+----------------------------
+revision 1.1
+date: 2021-04-20 15:29:48 +0200;  author: stsp;  state: Exp;  commitid: 100607ED74996F4C8AF;
+branches:  1.1.1;
+Initial revision
+----------------------------
+revision 1.1.1.1
+date: 2021-04-20 15:29:48 +0200;  author: stsp;  state: Exp;  lines: +0 -0;  commitid: 100607ED74996F4C8AF;
+initial import
+=============================================================================
