@@ -54,6 +54,10 @@ DEFAULT_BRANCH = b"HEAD"
 TEMPORARY_DIR_PREFIX_PATTERN = "swh.loader.cvs."
 
 
+class BadPathException(Exception):
+    pass
+
+
 class CvsLoader(BaseLoader):
     """Swh cvs loader.
 
@@ -135,6 +139,20 @@ class CvsLoader(BaseLoader):
         self._last_revision = revision
         return (revision, swh_dir)
 
+    def file_path_is_safe(self, wtpath):
+        if "%s..%s" % (os.path.sep, os.path.sep) in wtpath:
+            # Paths with back-references should not appear
+            # in CVS protocol messages or CVS rlog output
+            return False
+        elif (
+            os.path.commonpath([self.tempdir_path, os.path.normpath(wtpath)])
+            != self.tempdir_path
+        ):
+            # The path must be a child of our temporary directory.
+            return False
+        else:
+            return True
+
     def checkout_file_with_rcsparse(
         self, k: ChangeSetKey, f: FileRevision, rcsfile: rcsparse.rcsfile
     ) -> None:
@@ -142,6 +160,8 @@ class CvsLoader(BaseLoader):
         assert self.server_style_cvsroot
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.tempdir_path, path)
+        if not self.file_path_is_safe(wtpath):
+            raise BadPathException("unsafe path found in RCS file: %s" % f.path)
         self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
         if f.state == "dead":
             # remove this file from work tree
@@ -189,6 +209,8 @@ class CvsLoader(BaseLoader):
         assert self.cvsroot_path
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.tempdir_path, path)
+        if not self.file_path_is_safe(wtpath):
+            raise BadPathException("unsafe path found in cvs rlog output: %s" % f.path)
         self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
         if f.state == "dead":
             # remove this file from work tree
@@ -528,6 +550,7 @@ class CvsLoader(BaseLoader):
             return False
         except Exception:
             self.log.exception("Exception in fetch_data:")
+            self._visit_status = "failed"
             return False  # Stopping iteration
         self._contents, self._skipped_contents, self._directories, rev = data
         self._revisions = [rev]
@@ -602,8 +625,9 @@ class CvsLoader(BaseLoader):
         self._revisions = []
 
     def load_status(self) -> Dict[str, Any]:
-        assert self.snapshot is not None
-        if self.last_snapshot == self.snapshot:
+        if self.snapshot is None:
+            load_status = "failed"
+        elif self.last_snapshot == self.snapshot:
             load_status = "uneventful"
         else:
             load_status = "eventful"
