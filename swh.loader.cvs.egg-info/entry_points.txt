@@ -1,0 +1,4 @@
+
+        [swh.workers]
+        loader.cvs=swh.loader.cvs:register
+    

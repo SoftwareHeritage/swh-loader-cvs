@@ -4,9 +4,12 @@
 # See top-level LICENSE file for more information
 
 import os
+import tempfile
 from typing import Any, Dict
 
-from swh.loader.cvs.loader import CvsLoader
+import pytest
+
+from swh.loader.cvs.loader import BadPathException, CvsLoader
 from swh.loader.tests import (
     assert_last_visit_matches,
     check_snapshot,
@@ -1081,3 +1084,63 @@ def test_loader_cvs_pserver_expand_log_keyword2(swh_storage, datadir, tmp_path):
         "skipped_content": 0,
         "snapshot": 1,
     }
+
+
+@pytest.mark.parametrize(
+    "rlog_unsafe_path",
+    [
+        # paths that walk to parent directory:
+        "unsafe_rlog_with_unsafe_relative_path.rlog",
+        # absolute path outside the CVS server's root directory:
+        "unsafe_rlog_wrong_arborescence.rlog",
+    ],
+)
+def test_loader_cvs_weird_paths_in_rlog(
+    swh_storage, datadir, tmp_path, mocker, rlog_unsafe_path
+):
+    """Handle cvs rlog output which contains unsafe paths"""
+    archive_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/greek-tree"  # CVS module name
+
+    # Ask our cvsclient to connect via the 'cvs server' command
+    repo_url = f"fake://{repo_url[7:]}"
+
+    # And let's pretend the server returned this rlog output instead of
+    # what it would actually return.
+    rlog_file = tempfile.NamedTemporaryFile(
+        dir=tmp_path, mode="w+", delete=False, prefix="weird-path-rlog-"
+    )
+    rlog_file_path = rlog_file.name
+
+    rlog_weird_paths = open(os.path.join(datadir, rlog_unsafe_path))
+    for line in rlog_weird_paths.readlines():
+        rlog_file.write(line.replace("{cvsroot_path}", os.path.dirname(repo_url[7:])))
+    rlog_file.close()
+    rlog_file_override = open(rlog_file_path, "rb")  # re-open as bytes instead of str
+    mock_read = mocker.patch("swh.loader.cvs.cvsclient.CVSClient.fetch_rlog")
+    mock_read.return_value = rlog_file_override
+
+    def side_effect(self, path="", state=""):
+        return None
+
+    mock_read.side_effect = side_effect(side_effect)
+
+    try:
+        loader = CvsLoader(
+            swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name),
+        )
+    except BadPathException:
+        pass
+
+    assert loader.load() == {"status": "failed"}
+
+    assert_last_visit_matches(
+        swh_storage, repo_url, status="failed", type="cvs",
+    )
+
+    assert mock_read.called
+
+    rlog_file_override.close()
+    os.unlink(rlog_file_path)
