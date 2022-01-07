@@ -1,3 +1,14 @@
+swh-loader-cvs (0.1.0-1~swh1) unstable-swh; urgency=medium
+
+  * New upstream release 0.1.0     - (tagged by Antoine R. Dumont
+    (@ardumont) <ardumont@softwareheritage.org> on 2022-01-07 15:15:00
+    +0100)
+  * Upstream changes:     - v0.1.0     - Validate input paths in the CVS
+    loader     - swh.loader.cvs.tasks: Fix parameter uses to the ones
+    needed
+
+ -- Software Heritage autobuilder (on jenkins-debian1) <jenkins@jenkins-debian1.internal.softwareheritage.org>  Fri, 07 Jan 2022 14:17:40 +0000
+
 swh-loader-cvs (0.0.2-2~swh1) unstable-swh; urgency=medium
 
   * Add missing dh_install override to avoid stomping on the namespace
