@@ -161,8 +161,8 @@ class CvsLoader(BaseLoader):
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.tempdir_path, path)
         if not self.file_path_is_safe(wtpath):
-            raise BadPathException("unsafe path found in RCS file: %s" % f.path)
-        self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
+            raise BadPathException(f"unsafe path found in RCS file: {f.path}")
+        self.log.info("rev %s state %s file %s", f.rev, f.state, f.path)
         if f.state == "dead":
             # remove this file from work tree
             try:
@@ -210,8 +210,8 @@ class CvsLoader(BaseLoader):
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.tempdir_path, path)
         if not self.file_path_is_safe(wtpath):
-            raise BadPathException("unsafe path found in cvs rlog output: %s" % f.path)
-        self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
+            raise BadPathException(f"unsafe path found in cvs rlog output: {f.path}")
+        self.log.info("rev %s state %s file %s", f.rev, f.state, f.path)
         if f.state == "dead":
             # remove this file from work tree
             try:
@@ -221,7 +221,7 @@ class CvsLoader(BaseLoader):
         else:
             dirname = os.path.dirname(wtpath)
             os.makedirs(dirname, exist_ok=True)
-            self.log.debug("checkout to %s\n" % wtpath)
+            self.log.debug("checkout to %s\n", wtpath)
             fp = cvsclient.checkout(path, f.rev, dirname, expand_keywords=True)
             os.rename(fp.name, wtpath)
             try:
@@ -351,11 +351,9 @@ class CvsLoader(BaseLoader):
             if have_module and have_cvsroot:
                 break
         if not have_module:
-            raise NotFound(
-                "CVS module %s not found at %s" % (self.cvs_module_name, url)
-            )
+            raise NotFound(f"CVS module {self.cvs_module_name} not found at {url}")
         if not have_cvsroot:
-            raise NotFound("No CVSROOT directory found at %s" % url)
+            raise NotFound(f"No CVSROOT directory found at {url}")
 
         # Fetch the CVSROOT directory and the desired CVS module.
         assert self.cvsroot_path
@@ -384,7 +382,7 @@ class CvsLoader(BaseLoader):
             url.path,
         )
         if not url.path:
-            raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
+            raise NotFound(f"Invalid CVS origin URL '{self.origin_url}'")
         self.cvs_module_name = os.path.basename(url.path)
         self.server_style_cvsroot = os.path.dirname(url.path)
         self.worktree_path = os.path.join(self.tempdir_path, self.cvs_module_name)
@@ -425,8 +423,8 @@ class CvsLoader(BaseLoader):
 
             if not have_rcsfile:
                 raise NotFound(
-                    "Directory %s does not contain any valid RCS files %s",
-                    self.cvsroot_path,
+                    f"Directory {self.cvsroot_path} does not contain any valid "
+                    "RCS files",
                 )
             if not have_cvsroot:
                 self.log.warn(
@@ -535,7 +533,7 @@ class CvsLoader(BaseLoader):
                 cvs_changesets, use_rcsparse=False
             )
         else:
-            raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
+            raise NotFound(f"Invalid CVS origin URL '{self.origin_url}'")
 
     def fetch_data(self) -> bool:
         """Fetch the next CVS revision."""
