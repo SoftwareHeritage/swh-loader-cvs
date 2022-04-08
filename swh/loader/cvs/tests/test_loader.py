@@ -38,7 +38,10 @@ def test_loader_cvs_not_found_no_mock(swh_storage, tmp_path):
     assert loader.load() == {"status": "uneventful"}
 
     assert_last_visit_matches(
-        swh_storage, unknown_repo_url, status="not_found", type="cvs",
+        swh_storage,
+        unknown_repo_url,
+        status="not_found",
+        type="cvs",
     )
 
 
@@ -78,9 +81,7 @@ def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
 
 
 def test_loader_cvs_2_visits_no_change(swh_storage, datadir, tmp_path):
-    """Eventful visit followed by uneventful visit should yield the same snapshot
-
-    """
+    """Eventful visit followed by uneventful visit should yield the same snapshot"""
     archive_name = "runbaby"
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
@@ -142,7 +143,11 @@ def test_loader_cvs_with_file_additions_and_deletions(swh_storage, datadir, tmp_
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=GREEK_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -179,7 +184,11 @@ def test_loader_cvs_pserver_with_file_additions_and_deletions(
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=GREEK_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -221,7 +230,11 @@ def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
     assert loader.load() == {"status": "eventful"}
 
     visit_status1 = assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=GREEK_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -571,7 +584,11 @@ def test_loader_cvs_readded_file_in_attic(swh_storage, datadir, tmp_path):
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=DINO_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -613,7 +630,11 @@ def test_loader_cvs_pserver_readded_file_in_attic(swh_storage, datadir, tmp_path
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=DINO_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -659,7 +680,11 @@ def test_loader_cvs_split_commits_by_commitid(swh_storage, datadir, tmp_path):
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT2.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=DINO_SNAPSHOT2.id,
     )
 
     check_snapshot(DINO_SNAPSHOT2, loader.storage)
@@ -697,7 +722,11 @@ def test_loader_cvs_pserver_split_commits_by_commitid(swh_storage, datadir, tmp_
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT2.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=DINO_SNAPSHOT2.id,
     )
 
     check_snapshot(DINO_SNAPSHOT2, loader.storage)
@@ -1129,7 +1158,9 @@ def test_loader_cvs_weird_paths_in_rlog(
 
     try:
         loader = CvsLoader(
-            swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name),
+            swh_storage,
+            repo_url,
+            cvsroot_path=os.path.join(tmp_path, archive_name),
         )
     except BadPathException:
         pass
@@ -1137,7 +1168,10 @@ def test_loader_cvs_weird_paths_in_rlog(
     assert loader.load() == {"status": "failed"}
 
     assert_last_visit_matches(
-        swh_storage, repo_url, status="failed", type="cvs",
+        swh_storage,
+        repo_url,
+        status="failed",
+        type="cvs",
     )
 
     assert mock_read.called

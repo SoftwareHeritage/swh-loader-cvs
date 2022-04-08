@@ -93,7 +93,7 @@ class RlogConv:
         revisions: Dict[str, revtuple],
         logmsgs: Dict[str, Optional[bytes]],
     ) -> None:
-        """ Convert RCS revision history of a file into self.changesets items """
+        """Convert RCS revision history of a file into self.changesets items"""
         rtags: Dict[str, List[str]] = dict()
         # RCS and CVS represent branches by adding digits to revision numbers.
         # And CVS assigns special meaning to certain revision number ranges.
@@ -307,18 +307,18 @@ def _parse_log_header(
 ]:
     """Parse and RCS/CVS log header.
 
-  fp is a file (pipe) opened for reading the log information.
+    fp is a file (pipe) opened for reading the log information.
 
-  On entry, fp should point to the start of a log entry.
-  On exit, fp will have consumed the separator line between the header and
-  the first revision log.
+    On entry, fp should point to the start of a log entry.
+    On exit, fp will have consumed the separator line between the header and
+    the first revision log.
 
-  If there is no revision information (e.g. the "-h" switch was passed to
-  rlog), then fp will consumed the file separator line on exit.
+    If there is no revision information (e.g. the "-h" switch was passed to
+    rlog), then fp will consumed the file separator line on exit.
 
-  Returns: filename, default branch, tag dictionary, lock dictionary,
-  rlog error message, and eof flag
-  """
+    Returns: filename, default branch, tag dictionary, lock dictionary,
+    rlog error message, and eof flag
+    """
 
     filename = branch = msg = b""
     taginfo: Dict[bytes, bytes] = {}  # tag name => number
@@ -434,14 +434,14 @@ def _parse_commitid(commitid: bytes) -> Optional[str]:
 def _parse_log_entry(fp) -> Tuple[Optional[revtuple], Optional[bytes], Optional[bytes]]:
     """Parse a single log entry.
 
-  On entry, fp should point to the first line of the entry (the "revision"
-  line).
-  On exit, fp will have consumed the log separator line (dashes) or the
-  end-of-file marker (equals).
+    On entry, fp should point to the first line of the entry (the "revision"
+    line).
+    On exit, fp will have consumed the log separator line (dashes) or the
+    end-of-file marker (equals).
 
-  Returns: Revision data tuple (number string, date, author, state, branches, revnumstr,
-  commitid) if any, log, and eof flag (see _EOF_*)
-  """
+    Returns: Revision data tuple (number string, date, author, state, branches, revnumstr,
+    commitid) if any, log, and eof flag (see _EOF_*)
+    """
     rev = None
     line = fp.readline()
     if not line:

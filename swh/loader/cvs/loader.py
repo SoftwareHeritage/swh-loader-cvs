@@ -231,7 +231,9 @@ class CvsLoader(BaseLoader):
                 pass
 
     def process_cvs_changesets(
-        self, cvs_changesets: List[ChangeSetKey], use_rcsparse: bool,
+        self,
+        cvs_changesets: List[ChangeSetKey],
+        use_rcsparse: bool,
     ) -> Iterator[
         Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
     ]:
@@ -503,7 +505,8 @@ class CvsLoader(BaseLoader):
                     attic_paths.append(attic_path)  # avoid multiple visits
                     # Try to fetch more rlog data from this Attic directory.
                     attic_rlog_file = self.cvsclient.fetch_rlog(
-                        path=attic_path, state="dead",
+                        path=attic_path,
+                        state="dead",
                     )
                     if attic_rlog_file:
                         attic_rlog_files.append(attic_rlog_file)
