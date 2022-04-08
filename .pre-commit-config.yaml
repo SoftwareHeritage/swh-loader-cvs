@@ -11,6 +11,7 @@ repos:
     rev: 4.0.1
     hooks:
       - id: flake8
+        additional_dependencies: [flake8-bugbear==22.3.23]
         exclude: cvs2gitdump|rcsparse
 
   - repo: https://github.com/codespell-project/codespell
@@ -41,7 +42,7 @@ repos:
         exclude: cvs2gitdump|rcsparse
 
   - repo: https://github.com/python/black
-    rev: 19.10b0
+    rev: 22.3.0
     hooks:
       - id: black
         exclude: cvs2gitdump|rcsparse
