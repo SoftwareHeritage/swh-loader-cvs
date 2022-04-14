@@ -4,6 +4,7 @@
 # See top-level LICENSE file for more information
 
 import os
+import subprocess
 import tempfile
 from typing import Any, Dict
 
@@ -1178,3 +1179,60 @@ def test_loader_cvs_weird_paths_in_rlog(
 
     rlog_file_override.close()
     os.unlink(rlog_file_path)
+
+
+def test_loader_rsync_retry(swh_storage, mocker, tmp_path):
+    module_name = "module"
+    host = "example.org"
+    path = f"/cvsroot/{module_name}"
+    repo_url = f"rsync://{host}{path}/"
+
+    rsync_first_call = ["rsync", repo_url]
+    rsync_second_call = [
+        "rsync",
+        "-az",
+        f"{repo_url}CVSROOT/",
+        os.path.join(tmp_path, "CVSROOT/"),
+    ]
+    rsync_third_call = [
+        "rsync",
+        "-az",
+        f"{repo_url}{module_name}/",
+        os.path.join(tmp_path, f"{module_name}/"),
+    ]
+
+    mock_subprocess = mocker.patch("swh.loader.cvs.loader.subprocess")
+    mock_subprocess.run.side_effect = [
+        subprocess.CompletedProcess(args=rsync_first_call, returncode=23),
+        subprocess.CompletedProcess(
+            args=rsync_first_call,
+            returncode=0,
+            stdout=f"""
+            drwxr-xr-x             21 2012/11/04 06:58:58 .
+            drwxr-xr-x             39 2021/01/22 10:21:05 CVSROOT
+            drwxr-xr-x             15 2020/12/28 00:50:21 {module_name}""",
+        ),
+        subprocess.CompletedProcess(
+            args=rsync_second_call,
+            returncode=23,
+        ),
+        subprocess.CompletedProcess(
+            args=rsync_second_call,
+            returncode=23,
+        ),
+        subprocess.CompletedProcess(args=rsync_second_call, returncode=0),
+        subprocess.CompletedProcess(
+            args=rsync_third_call,
+            returncode=23,
+        ),
+        subprocess.CompletedProcess(
+            args=rsync_third_call,
+            returncode=23,
+        ),
+        subprocess.CompletedProcess(args=rsync_third_call, returncode=0),
+    ]
+
+    loader = CvsLoader(swh_storage, repo_url)
+    loader.cvs_module_name = module_name
+    loader.cvsroot_path = tmp_path
+    loader.fetch_cvs_repo_with_rsync(host, path)
