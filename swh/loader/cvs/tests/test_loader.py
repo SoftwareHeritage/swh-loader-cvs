@@ -4,6 +4,7 @@
 # See top-level LICENSE file for more information
 
 import os
+import subprocess
 import tempfile
 from typing import Any, Dict
 
@@ -38,7 +39,10 @@ def test_loader_cvs_not_found_no_mock(swh_storage, tmp_path):
     assert loader.load() == {"status": "uneventful"}
 
     assert_last_visit_matches(
-        swh_storage, unknown_repo_url, status="not_found", type="cvs",
+        swh_storage,
+        unknown_repo_url,
+        status="not_found",
+        type="cvs",
     )
 
 
@@ -78,9 +82,7 @@ def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
 
 
 def test_loader_cvs_2_visits_no_change(swh_storage, datadir, tmp_path):
-    """Eventful visit followed by uneventful visit should yield the same snapshot
-
-    """
+    """Eventful visit followed by uneventful visit should yield the same snapshot"""
     archive_name = "runbaby"
     archive_path = os.path.join(datadir, f"{archive_name}.tgz")
     repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
@@ -142,7 +144,11 @@ def test_loader_cvs_with_file_additions_and_deletions(swh_storage, datadir, tmp_
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=GREEK_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -179,7 +185,11 @@ def test_loader_cvs_pserver_with_file_additions_and_deletions(
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=GREEK_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -221,7 +231,11 @@ def test_loader_cvs_2_visits_with_change(swh_storage, datadir, tmp_path):
     assert loader.load() == {"status": "eventful"}
 
     visit_status1 = assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=GREEK_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=GREEK_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -571,7 +585,11 @@ def test_loader_cvs_readded_file_in_attic(swh_storage, datadir, tmp_path):
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=DINO_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -613,7 +631,11 @@ def test_loader_cvs_pserver_readded_file_in_attic(swh_storage, datadir, tmp_path
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=DINO_SNAPSHOT.id,
     )
 
     stats = get_stats(loader.storage)
@@ -659,7 +681,11 @@ def test_loader_cvs_split_commits_by_commitid(swh_storage, datadir, tmp_path):
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT2.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=DINO_SNAPSHOT2.id,
     )
 
     check_snapshot(DINO_SNAPSHOT2, loader.storage)
@@ -697,7 +723,11 @@ def test_loader_cvs_pserver_split_commits_by_commitid(swh_storage, datadir, tmp_
     assert loader.load() == {"status": "eventful"}
 
     assert_last_visit_matches(
-        loader.storage, repo_url, status="full", type="cvs", snapshot=DINO_SNAPSHOT2.id,
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=DINO_SNAPSHOT2.id,
     )
 
     check_snapshot(DINO_SNAPSHOT2, loader.storage)
@@ -1129,7 +1159,9 @@ def test_loader_cvs_weird_paths_in_rlog(
 
     try:
         loader = CvsLoader(
-            swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name),
+            swh_storage,
+            repo_url,
+            cvsroot_path=os.path.join(tmp_path, archive_name),
         )
     except BadPathException:
         pass
@@ -1137,10 +1169,70 @@ def test_loader_cvs_weird_paths_in_rlog(
     assert loader.load() == {"status": "failed"}
 
     assert_last_visit_matches(
-        swh_storage, repo_url, status="failed", type="cvs",
+        swh_storage,
+        repo_url,
+        status="failed",
+        type="cvs",
     )
 
     assert mock_read.called
 
     rlog_file_override.close()
     os.unlink(rlog_file_path)
+
+
+def test_loader_rsync_retry(swh_storage, mocker, tmp_path):
+    module_name = "module"
+    host = "example.org"
+    path = f"/cvsroot/{module_name}"
+    repo_url = f"rsync://{host}{path}/"
+
+    rsync_first_call = ["rsync", repo_url]
+    rsync_second_call = [
+        "rsync",
+        "-az",
+        f"{repo_url}CVSROOT/",
+        os.path.join(tmp_path, "CVSROOT/"),
+    ]
+    rsync_third_call = [
+        "rsync",
+        "-az",
+        f"{repo_url}{module_name}/",
+        os.path.join(tmp_path, f"{module_name}/"),
+    ]
+
+    mock_subprocess = mocker.patch("swh.loader.cvs.loader.subprocess")
+    mock_subprocess.run.side_effect = [
+        subprocess.CompletedProcess(args=rsync_first_call, returncode=23),
+        subprocess.CompletedProcess(
+            args=rsync_first_call,
+            returncode=0,
+            stdout=f"""
+            drwxr-xr-x             21 2012/11/04 06:58:58 .
+            drwxr-xr-x             39 2021/01/22 10:21:05 CVSROOT
+            drwxr-xr-x             15 2020/12/28 00:50:21 {module_name}""",
+        ),
+        subprocess.CompletedProcess(
+            args=rsync_second_call,
+            returncode=23,
+        ),
+        subprocess.CompletedProcess(
+            args=rsync_second_call,
+            returncode=23,
+        ),
+        subprocess.CompletedProcess(args=rsync_second_call, returncode=0),
+        subprocess.CompletedProcess(
+            args=rsync_third_call,
+            returncode=23,
+        ),
+        subprocess.CompletedProcess(
+            args=rsync_third_call,
+            returncode=23,
+        ),
+        subprocess.CompletedProcess(args=rsync_third_call, returncode=0),
+    ]
+
+    loader = CvsLoader(swh_storage, repo_url)
+    loader.cvs_module_name = module_name
+    loader.cvsroot_path = tmp_path
+    loader.fetch_cvs_repo_with_rsync(host, path)

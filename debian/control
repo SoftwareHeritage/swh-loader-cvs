@@ -19,6 +19,7 @@ Build-Depends:
  cvs,
  python3-swh.core.db.pytestplugin,
  python3-all-dev,
+ python3-tenacity,
 Rules-Requires-Root: no
 Standards-Version: 4.6.0
 Homepage: https://forge.softwareheritage.org/source/swh-loader-cvs

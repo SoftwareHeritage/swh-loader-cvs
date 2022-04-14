@@ -15,6 +15,9 @@ import tempfile
 import time
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple, cast
 
+from tenacity import retry
+from tenacity.retry import retry_if_exception_type
+from tenacity.stop import stop_after_attempt
 from urllib3.util import parse_url
 
 from swh.loader.core.loader import BaseLoader
@@ -52,6 +55,14 @@ from swh.storage.interface import StorageInterface
 DEFAULT_BRANCH = b"HEAD"
 
 TEMPORARY_DIR_PREFIX_PATTERN = "swh.loader.cvs."
+
+
+def rsync_retry():
+    return retry(
+        retry=retry_if_exception_type(subprocess.CalledProcessError),
+        stop=stop_after_attempt(max_attempt_number=4),
+        reraise=True,
+    )
 
 
 class BadPathException(Exception):
@@ -161,8 +172,8 @@ class CvsLoader(BaseLoader):
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.tempdir_path, path)
         if not self.file_path_is_safe(wtpath):
-            raise BadPathException("unsafe path found in RCS file: %s" % f.path)
-        self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
+            raise BadPathException(f"unsafe path found in RCS file: {f.path}")
+        self.log.info("rev %s state %s file %s", f.rev, f.state, f.path)
         if f.state == "dead":
             # remove this file from work tree
             try:
@@ -210,8 +221,8 @@ class CvsLoader(BaseLoader):
         path = file_path(self.cvsroot_path, f.path)
         wtpath = os.path.join(self.tempdir_path, path)
         if not self.file_path_is_safe(wtpath):
-            raise BadPathException("unsafe path found in cvs rlog output: %s" % f.path)
-        self.log.info("rev %s state %s file %s" % (f.rev, f.state, f.path))
+            raise BadPathException(f"unsafe path found in cvs rlog output: {f.path}")
+        self.log.info("rev %s state %s file %s", f.rev, f.state, f.path)
         if f.state == "dead":
             # remove this file from work tree
             try:
@@ -221,7 +232,7 @@ class CvsLoader(BaseLoader):
         else:
             dirname = os.path.dirname(wtpath)
             os.makedirs(dirname, exist_ok=True)
-            self.log.debug("checkout to %s\n" % wtpath)
+            self.log.debug("checkout to %s\n", wtpath)
             fp = cvsclient.checkout(path, f.rev, dirname, expand_keywords=True)
             os.rename(fp.name, wtpath)
             try:
@@ -231,7 +242,9 @@ class CvsLoader(BaseLoader):
                 pass
 
     def process_cvs_changesets(
-        self, cvs_changesets: List[ChangeSetKey], use_rcsparse: bool,
+        self,
+        cvs_changesets: List[ChangeSetKey],
+        use_rcsparse: bool,
     ) -> Iterator[
         Tuple[List[Content], List[SkippedContent], List[Directory], Revision]
     ]:
@@ -335,11 +348,20 @@ class CvsLoader(BaseLoader):
                 for k in excluded_keywords:
                     self.excluded_keywords.append(k.strip())
 
+    @rsync_retry()
+    def execute_rsync(
+        self, rsync_cmd: List[str], **run_opts
+    ) -> subprocess.CompletedProcess:
+        rsync = subprocess.run(rsync_cmd, **run_opts)
+        rsync.check_returncode()
+        return rsync
+
     def fetch_cvs_repo_with_rsync(self, host: str, path: str) -> None:
         # URL *must* end with a trailing slash in order to get CVSROOT listed
         url = "rsync://%s%s/" % (host, os.path.dirname(path))
-        rsync = subprocess.run(["rsync", url], capture_output=True, encoding="ascii")
-        rsync.check_returncode()
+        rsync = self.execute_rsync(
+            ["rsync", url], capture_output=True, encoding="ascii"
+        )
         have_cvsroot = False
         have_module = False
         for line in rsync.stdout.split("\n"):
@@ -351,23 +373,21 @@ class CvsLoader(BaseLoader):
             if have_module and have_cvsroot:
                 break
         if not have_module:
-            raise NotFound(
-                "CVS module %s not found at %s" % (self.cvs_module_name, url)
-            )
+            raise NotFound(f"CVS module {self.cvs_module_name} not found at {url}")
         if not have_cvsroot:
-            raise NotFound("No CVSROOT directory found at %s" % url)
+            raise NotFound(f"No CVSROOT directory found at {url}")
 
         # Fetch the CVSROOT directory and the desired CVS module.
         assert self.cvsroot_path
         for d in ("CVSROOT", self.cvs_module_name):
             target_dir = os.path.join(self.cvsroot_path, d)
             os.makedirs(target_dir, exist_ok=True)
-            subprocess.run(
-                # Append trailing path separators ("/" in the URL and os.path.sep in the
-                # local target directory path) to ensure that rsync will place files
-                # directly within our target directory .
-                ["rsync", "-a", url + d + "/", target_dir + os.path.sep]
-            ).check_returncode()
+            # Append trailing path separators ("/" in the URL and os.path.sep in the
+            # local target directory path) to ensure that rsync will place files
+            # directly within our target directory .
+            self.execute_rsync(
+                ["rsync", "-az", url + d + "/", target_dir + os.path.sep]
+            )
 
     def prepare(self) -> None:
         self._last_revision = None
@@ -384,7 +404,7 @@ class CvsLoader(BaseLoader):
             url.path,
         )
         if not url.path:
-            raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
+            raise NotFound(f"Invalid CVS origin URL '{self.origin_url}'")
         self.cvs_module_name = os.path.basename(url.path)
         self.server_style_cvsroot = os.path.dirname(url.path)
         self.worktree_path = os.path.join(self.tempdir_path, self.cvs_module_name)
@@ -425,8 +445,8 @@ class CvsLoader(BaseLoader):
 
             if not have_rcsfile:
                 raise NotFound(
-                    "Directory %s does not contain any valid RCS files %s",
-                    self.cvsroot_path,
+                    f"Directory {self.cvsroot_path} does not contain any valid "
+                    "RCS files",
                 )
             if not have_cvsroot:
                 self.log.warn(
@@ -505,7 +525,8 @@ class CvsLoader(BaseLoader):
                     attic_paths.append(attic_path)  # avoid multiple visits
                     # Try to fetch more rlog data from this Attic directory.
                     attic_rlog_file = self.cvsclient.fetch_rlog(
-                        path=attic_path, state="dead",
+                        path=attic_path,
+                        state="dead",
                     )
                     if attic_rlog_file:
                         attic_rlog_files.append(attic_rlog_file)
@@ -535,7 +556,7 @@ class CvsLoader(BaseLoader):
                 cvs_changesets, use_rcsparse=False
             )
         else:
-            raise NotFound("Invalid CVS origin URL '%s'" % self.origin_url)
+            raise NotFound(f"Invalid CVS origin URL '{self.origin_url}'")
 
     def fetch_data(self) -> bool:
         """Fetch the next CVS revision."""
