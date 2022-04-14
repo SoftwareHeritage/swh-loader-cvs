@@ -10,6 +10,7 @@ swh-storage.
 from datetime import datetime
 import os
 import os.path
+import sentry_sdk
 import subprocess
 import tempfile
 import time
@@ -18,6 +19,7 @@ from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tupl
 from tenacity import retry
 from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
+
 from urllib3.util import parse_url
 
 from swh.loader.core.loader import BaseLoader
@@ -561,6 +563,7 @@ class CvsLoader(BaseLoader):
             return False
         except Exception:
             self.log.exception("Exception in fetch_data:")
+            sentry_sdk.capture_exception()
             self._visit_status = "failed"
             return False  # Stopping iteration
         self._contents, self._skipped_contents, self._directories, rev = data
