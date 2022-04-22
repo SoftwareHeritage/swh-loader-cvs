@@ -6,7 +6,7 @@ into the SWH dataset.
 
 The main entry points are
 
--  :class:``swh.loader.cvs.loader.CvsLoader`` for the main cvs loader
+-  :class:`swh.loader.cvs.loader.CvsLoader` for the main cvs loader
    which ingests content out of a local cvs repository
 
 Features
