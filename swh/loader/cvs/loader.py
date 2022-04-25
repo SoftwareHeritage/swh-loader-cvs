@@ -38,7 +38,6 @@ from swh.model import from_disk, hashutil
 from swh.model.model import (
     Content,
     Directory,
-    Origin,
     Person,
     Revision,
     RevisionType,
@@ -97,16 +96,12 @@ class CvsLoader(BaseLoader):
         visit_date: Optional[datetime] = None,
         cvsroot_path: Optional[str] = None,
         temp_directory: str = "/tmp",
-        max_content_size: Optional[int] = None,
+        **kwargs: Any,
     ):
-        super().__init__(
-            storage=storage,
-            logging_class="swh.loader.cvs.CvsLoader",
-            max_content_size=max_content_size,
-        )
         self.cvsroot_url = url
         # origin url as unique identifier for origin in swh archive
-        self.origin_url = origin_url if origin_url else self.cvsroot_url
+        origin_url = origin_url if origin_url else self.cvsroot_url
+        super().__init__(storage=storage, origin_url=origin_url, **kwargs)
         self.temp_directory = temp_directory
 
         # internal state used to store swh objects
@@ -117,14 +112,14 @@ class CvsLoader(BaseLoader):
         # internal state, current visit
         self._last_revision: Optional[Revision] = None
         self._visit_status = "full"
-        self.visit_date = visit_date
+        self.visit_date = visit_date or self.visit_date
         self.cvsroot_path = cvsroot_path
         self.custom_id_keyword = None
         self.excluded_keywords: List[str] = []
 
         self.snapshot: Optional[Snapshot] = None
         self.last_snapshot: Optional[Snapshot] = snapshot_get_latest(
-            self.storage, self.origin_url
+            self.storage, self.origin.url
         )
 
     def compute_swh_revision(
@@ -288,11 +283,6 @@ class CvsLoader(BaseLoader):
             )
             yield contents, skipped_contents, directories, revision
 
-    def prepare_origin_visit(self) -> None:
-        self.origin = Origin(
-            url=self.origin_url if self.origin_url else self.cvsroot_url
-        )
-
     def pre_cleanup(self) -> None:
         """Cleanup potential dangling files from prior runs (e.g. OOM killed
         tasks)
@@ -396,15 +386,15 @@ class CvsLoader(BaseLoader):
             prefix=TEMPORARY_DIR_PREFIX_PATTERN,
             dir=self.temp_directory,
         )
-        url = parse_url(self.origin_url)
+        url = parse_url(self.origin.url)
         self.log.debug(
             "prepare; origin_url=%s scheme=%s path=%s",
-            self.origin_url,
+            self.origin.url,
             url.scheme,
             url.path,
         )
         if not url.path:
-            raise NotFound(f"Invalid CVS origin URL '{self.origin_url}'")
+            raise NotFound(f"Invalid CVS origin URL '{self.origin.url}'")
         self.cvs_module_name = os.path.basename(url.path)
         self.server_style_cvsroot = os.path.dirname(url.path)
         self.worktree_path = os.path.join(self.tempdir_path, self.cvs_module_name)
@@ -556,7 +546,7 @@ class CvsLoader(BaseLoader):
                 cvs_changesets, use_rcsparse=False
             )
         else:
-            raise NotFound(f"Invalid CVS origin URL '{self.origin_url}'")
+            raise NotFound(f"Invalid CVS origin URL '{self.origin.url}'")
 
     def fetch_data(self) -> bool:
         """Fetch the next CVS revision."""
