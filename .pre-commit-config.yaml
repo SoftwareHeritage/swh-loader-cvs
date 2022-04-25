@@ -21,9 +21,6 @@ repos:
         name: Check source code spelling
         exclude: cvs2gitdump|rcsparse
         stages: [commit]
-      - id: codespell
-        name: Check commit message spelling
-        stages: [commit-msg]
 
   - repo: local
     hooks:
