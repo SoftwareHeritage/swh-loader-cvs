@@ -1,3 +1,13 @@
+swh-loader-cvs (0.2.1-1~swh1) unstable-swh; urgency=medium
+
+  * New upstream release 0.2.1     - (tagged by Antoine R. Dumont
+    (@ardumont) <ardumont@softwareheritage.org> on 2022-04-25 18:09:06
+    +0200)
+  * Upstream changes:     - v0.2.1     - setup.py: Fix description
+    content-type to markdown
+
+ -- Software Heritage autobuilder (on jenkins-debian1) <jenkins@jenkins-debian1.internal.softwareheritage.org>  Mon, 25 Apr 2022 16:12:32 +0000
+
 swh-loader-cvs (0.1.1-1~swh1) unstable-swh; urgency=medium
 
   * New upstream release 0.1.1     - (tagged by Antoine Lambert
