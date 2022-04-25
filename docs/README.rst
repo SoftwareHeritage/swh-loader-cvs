@@ -6,7 +6,7 @@ into the SWH dataset.
 
 The main entry points are
 
--  :class:``swh.loader.cvs.loader.CvsLoader`` for the main cvs loader
+-  :class:`swh.loader.cvs.loader.CvsLoader` for the main cvs loader
    which ingests content out of a local cvs repository
 
 Features
@@ -59,39 +59,29 @@ The following URL protocol schemes are recognized by the loader:
 
 After the protocol scheme, the CVS server hostname must be specified,
 with an optional user:password field delimited from the hostname with
-the ‘@’ character:
-
-::
+the ‘@’ character::
 
    pserver://anonymous:password@cvs.example.com/
 
 After the hostname, the server-side CVS root path must be specified. The
 path will usually contain a CVSROOT directory on the server, though this
-directory may be hidden from clients:
-
-::
+directory may be hidden from clients::
 
    pserver://anonymous:password@cvs.example.com/var/cvs/
 
 The final component of the URL identifies the name of the CVS module
-which should be ingested into the SWH archive:
-
-::
+which should be ingested into the SWH archive::
 
    pserver://anonymous:password@cvs.example.com/var/cvs/project1
 
 As a concrete example, this URL points to the historical CVS repository
 of the a2ps project. In this case, the cvsroot path is /sources/a2ps and
-the CVS module of the project is called a2ps:
-
-::
+the CVS module of the project is called a2ps::
 
    pserver://anonymous:anonymous@cvs.savannah.gnu.org/sources/a2ps/a2ps
 
 In order to obtain the history of this repository the CVS loader will
-perform the CVS pserver protocol exchange which is also performed by:
-
-::
+perform the CVS pserver protocol exchange which is also performed by::
 
    cvs -d :pserver:anonymous@cvs.savannah.gnu.org/sources/a2ps rlog a2ps
 
@@ -168,9 +158,7 @@ The loader's test suite requires cvs to be installed.
 Because the rcsparse library is implemented in C and accessed via Python
 bindings, the CVS loader must be compiled and installed before tests can
 be run and the *build* directory must be passed as an argument to
-pytest:
-
-::
+pytest::
 
    $ ./setup.py build install
    $ pytest ./build
@@ -197,18 +185,14 @@ CLI run
 
 With the configuration:
 
-/tmp/loader_cvs.yml:
-
-::
+/tmp/loader_cvs.yml::
 
    storage:
      cls: remote
      args:
        url: http://localhost:5002/
 
-Run:
-
-::
+Run::
 
    swh loader --config-file /tmp/loader_cvs.yml \
        run cvs <cvs-url>
