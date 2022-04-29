@@ -4,10 +4,11 @@ Software Heritage - CVS loader
 The Software Heritage CVS Loader imports the history of CVS repositories
 into the SWH dataset.
 
-The main entry points are
+The main entry points is:
 
--  :class:`swh.loader.cvs.loader.CvsLoader` for the main cvs loader
+-  ``swh.loader.cvs.loader.CvsLoader`` for the main cvs loader
    which ingests content out of a local cvs repository
+
 
 Features
 --------
