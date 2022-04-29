@@ -1,8 +1,10 @@
-swh-loader-cvs (0.2.1-1~swh1~bpo10+1) buster-swh; urgency=medium
+swh-loader-cvs (0.2.2-1~swh1) unstable-swh; urgency=medium
 
-  * Rebuild for buster-swh
+  * New upstream release 0.2.2     - (tagged by Antoine Lambert
+    <anlambert@softwareheritage.org> on 2022-04-29 12:10:37 +0200)
+  * Upstream changes:     - version 0.2.2
 
- -- Software Heritage autobuilder (on jenkins-debian1) <jenkins@jenkins-debian1.internal.softwareheritage.org>  Mon, 25 Apr 2022 16:14:33 +0000
+ -- Software Heritage autobuilder (on jenkins-debian1) <jenkins@jenkins-debian1.internal.softwareheritage.org>  Fri, 29 Apr 2022 10:13:55 +0000
 
 swh-loader-cvs (0.2.1-1~swh1) unstable-swh; urgency=medium
 

@@ -40,7 +40,7 @@ setup(
     name="swh.loader.cvs",
     description="Software Heritage CVS Loader",
     long_description=long_description,
-    long_description_content_type="text/markdown",
+    long_description_content_type="text/x-rst",
     python_requires=">=3.7",
     author="Software Heritage developers",
     author_email="swh-devel@inria.fr",
