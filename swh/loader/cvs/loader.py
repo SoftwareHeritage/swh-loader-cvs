@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2021  The Software Heritage developers
+# Copyright (C) 2015-2022  The Software Heritage developers
 # See the AUTHORS file at the top-level directory of this distribution
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
@@ -10,16 +10,15 @@ swh-storage.
 from datetime import datetime
 import os
 import os.path
-import sentry_sdk
 import subprocess
 import tempfile
 import time
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple, cast
 
+import sentry_sdk
 from tenacity import retry
 from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
-
 from urllib3.util import parse_url
 
 from swh.loader.core.loader import BaseLoader
@@ -143,7 +142,7 @@ class CvsLoader(BaseLoader):
         else:
             parents = ()
         revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
-        self.log.info("SWH revision ID: %s", hashutil.hash_to_hex(revision.id))
+        self.log.debug("SWH revision ID: %s", hashutil.hash_to_hex(revision.id))
         self._last_revision = revision
         return (revision, swh_dir)
 
@@ -170,7 +169,7 @@ class CvsLoader(BaseLoader):
         wtpath = os.path.join(self.tempdir_path, path)
         if not self.file_path_is_safe(wtpath):
             raise BadPathException(f"unsafe path found in RCS file: {f.path}")
-        self.log.info("rev %s state %s file %s", f.rev, f.state, f.path)
+        self.log.debug("rev %s state %s file %s", f.rev, f.state, f.path)
         if f.state == "dead":
             # remove this file from work tree
             try:
@@ -219,7 +218,7 @@ class CvsLoader(BaseLoader):
         wtpath = os.path.join(self.tempdir_path, path)
         if not self.file_path_is_safe(wtpath):
             raise BadPathException(f"unsafe path found in cvs rlog output: {f.path}")
-        self.log.info("rev %s state %s file %s", f.rev, f.state, f.path)
+        self.log.debug("rev %s state %s file %s", f.rev, f.state, f.path)
         if f.state == "dead":
             # remove this file from work tree
             try:
@@ -256,7 +255,7 @@ class CvsLoader(BaseLoader):
         """
         for k in cvs_changesets:
             tstr = time.strftime("%c", time.gmtime(k.max_time))
-            self.log.info(
+            self.log.debug(
                 "changeset from %s by %s on branch %s", tstr, k.author, k.branch
             )
             logmsg: Optional[bytes] = b""
@@ -297,7 +296,7 @@ class CvsLoader(BaseLoader):
         )
 
     def cleanup(self) -> None:
-        self.log.info("cleanup")
+        self.log.debug("cleanup")
 
     def configure_custom_id_keyword(self, cvsconfig):
         """Parse CVSROOT/config and look for a custom keyword definition.
@@ -469,10 +468,10 @@ class CvsLoader(BaseLoader):
             # will need to be modified such that it spools the list of changesets
             # to disk instead.
             cvs = CvsConv(self.cvsroot_path, RcsKeywords(), False, CHANGESET_FUZZ_SEC)
-            self.log.info("Walking CVS module %s", self.cvs_module_name)
+            self.log.debug("Walking CVS module %s", self.cvs_module_name)
             cvs.walk(self.cvs_module_name)
             cvs_changesets = sorted(cvs.changesets)
-            self.log.info(
+            self.log.debug(
                 "CVS changesets found in %s: %d",
                 self.cvs_module_name,
                 len(cvs_changesets),
@@ -486,7 +485,7 @@ class CvsLoader(BaseLoader):
                 self.cvsroot_path = os.path.dirname(url.path)
             self.cvsclient = CVSClient(url)
             cvsroot_path = os.path.dirname(url.path)
-            self.log.info(
+            self.log.debug(
                 "Fetching CVS rlog from %s:%s/%s",
                 url.host,
                 cvsroot_path,
@@ -539,7 +538,7 @@ class CvsLoader(BaseLoader):
                 self.rlog.parse_rlog(cast(BinaryIO, fp))
                 self.rlog_file = cast(BinaryIO, fp)
             cvs_changesets = sorted(self.rlog.changesets)
-            self.log.info(
+            self.log.debug(
                 "CVS changesets found for %s: %d",
                 self.cvs_module_name,
                 len(cvs_changesets),
@@ -557,7 +556,9 @@ class CvsLoader(BaseLoader):
         except StopIteration:
             assert self._last_revision is not None
             self.snapshot = self.generate_and_load_snapshot(self._last_revision)
-            self.log.info("SWH snapshot ID: %s", hashutil.hash_to_hex(self.snapshot.id))
+            self.log.debug(
+                "SWH snapshot ID: %s", hashutil.hash_to_hex(self.snapshot.id)
+            )
             self.flush()
             self.loaded_snapshot_id = self.snapshot.id
             return False
