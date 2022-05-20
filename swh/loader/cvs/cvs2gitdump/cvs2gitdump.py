@@ -590,6 +590,7 @@ class RcsKeywords:
                 ret.append(line)
                 continue
 
+            expkw = 0
             line0 = b''
             while m is not None:
                 logbuf = None
@@ -703,7 +704,7 @@ class RcsKeywords:
                 m = self.re_kw.match(next_match_segment)
                 if m:
                     line = next_match_segment
-                    if (mode & self.RCS_KWEXP_NAME) != 0 and (expkw & self.RCS_KW_LOG) == 0 and line0[-1] == ord('$'):
+                    if (mode & self.RCS_KWEXP_NAME) != 0 and expkw and (expkw & self.RCS_KW_LOG) == 0 and line0[-1] == ord('$'):
                         # There is another keyword on this line that needs expansion.
                         # Avoid a double "$$" in the expanded string. This $ terminates
                         # the previous keyword and marks the beginning of the next one.
