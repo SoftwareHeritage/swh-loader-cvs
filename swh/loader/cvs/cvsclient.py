@@ -332,7 +332,10 @@ class CVSClient:
         bytecount = 0
         dirname = os.path.dirname(path)
         if dirname:
-            self.conn_write_str("Directory %s\n%s\n" % (dirname, dirname))
+            self.conn_write_str(
+                "Directory %s\n%s\n"
+                % (dirname, os.path.join(self.cvsroot_path, dirname))
+            )
         filename = os.path.basename(path)
         co_output = tempfile.NamedTemporaryFile(
             dir=dest_dir,
@@ -352,7 +355,13 @@ class CVSClient:
             "Argument -r%s\n"
             "%s"
             "Argument --\nArgument %s\nco \n"
-            % (self.cvs_module_name, self.cvs_module_name, rev, karg, path)
+            % (
+                self.cvs_module_name,
+                os.path.join(self.cvsroot_path, self.cvs_module_name),
+                rev,
+                karg,
+                path,
+            )
         )
         while True:
             if have_bytecount:
