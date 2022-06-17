@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2021  The Software Heritage developers
+# Copyright (C) 2016-2022  The Software Heritage developers
 # See the AUTHORS file at the top-level directory of this distribution
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
@@ -7,9 +7,11 @@ import os
 import subprocess
 import tempfile
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 import pytest
 
+from swh.loader.cvs.cvsclient import CVSClient
 from swh.loader.cvs.loader import BadPathException, CvsLoader
 from swh.loader.tests import (
     assert_last_visit_matches,
@@ -1236,3 +1238,22 @@ def test_loader_rsync_retry(swh_storage, mocker, tmp_path):
     loader.cvs_module_name = module_name
     loader.cvsroot_path = tmp_path
     loader.fetch_cvs_repo_with_rsync(host, path)
+
+
+@pytest.mark.parametrize(
+    "pserver_url",
+    [
+        "pserver://anonymous:anonymous@cvs.example.org/cvsroot/project/module",
+        "pserver://anonymous@cvs.example.org/cvsroot/project/module",
+    ],
+)
+def test_cvs_client_connect_pserver(mocker, pserver_url):
+    from swh.loader.cvs.cvsclient import socket
+
+    conn = mocker.MagicMock()
+    conn.recv.side_effect = [b"I LOVE YOU\n", b"Valid-requests \n", b"ok\n"]
+    mocker.patch.object(socket, "create_connection").return_value = conn
+    parsed_url = urlparse(pserver_url)
+
+    # check cvs client can be instantiated without errors
+    CVSClient(parsed_url)

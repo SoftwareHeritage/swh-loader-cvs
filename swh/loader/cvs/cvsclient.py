@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2021  The Software Heritage developers
+# Copyright (C) 2015-2022  The Software Heritage developers
 # See the AUTHORS file at the top-level directory of this distribution
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
@@ -86,20 +86,12 @@ class CVSProtocolError(Exception):
 
 
 class CVSClient:
-    def connect_pserver(self, hostname, port, auth):
+    def connect_pserver(self, hostname, port, username, password):
         if port is None:
             port = CVS_PSERVER_PORT
-        if auth is None:
+        if username is None:
             raise NotFound(
-                "Username and password are required for "
-                "a pserver connection: %s" % EXAMPLE_PSERVER_URL
-            )
-        try:
-            user = auth.split(":")[0]
-            password = auth.split(":")[1]
-        except IndexError:
-            raise NotFound(
-                "Username and password are required for "
+                "Username is required for "
                 "a pserver connection: %s" % EXAMPLE_PSERVER_URL
             )
 
@@ -108,10 +100,11 @@ class CVSClient:
         except ConnectionRefusedError:
             raise NotFound("Could not connect to %s:%s", hostname, port)
 
-        scrambled_password = scramble_password(password)
+        # use empty password if it is None
+        scrambled_password = scramble_password(password or "")
         request = "BEGIN AUTH REQUEST\n%s\n%s\n%s\nEND AUTH REQUEST\n" % (
             self.cvsroot_path,
-            user,
+            username,
             scrambled_password,
         )
         print("Request: %s\n" % request)
@@ -124,13 +117,13 @@ class CVSClient:
                 % (hostname, port, response)
             )
 
-    def connect_ssh(self, hostname, port, auth):
+    def connect_ssh(self, hostname, port, username):
         command = ["ssh"]
-        if auth is not None:
+        if username is not None:
             # Assume 'auth' contains only a user name.
             # We do not support password authentication with SSH since the
             # anoncvs user is usually granted access without a password.
-            command += ["-l", "%s" % auth]
+            command += ["-l", "%s" % username]
         if port is not None:
             command += ["-p", "%d" % port]
 
@@ -150,7 +143,7 @@ class CVSClient:
             command, bufsize=0, stdin=subprocess.PIPE, stdout=subprocess.PIPE
         )
 
-    def connect_fake(self, hostname, port, auth):
+    def connect_fake(self):
         command = ["cvs", "server"]
         # use non-buffered I/O to match behaviour of self.socket
         self.ssh = subprocess.Popen(
@@ -222,7 +215,7 @@ class CVSClient:
         Connect to a CVS server at the specified URL and perform the initial
         CVS protocol handshake.
         """
-        self.hostname = url.host
+        self.hostname = url.hostname
         self.cvsroot_path = os.path.dirname(url.path)
         self.cvs_module_name = os.path.basename(url.path)
         self.socket = None
@@ -231,11 +224,11 @@ class CVSClient:
         self.incomplete_line = b""
 
         if url.scheme == "pserver":
-            self.connect_pserver(url.host, url.port, url.auth)
+            self.connect_pserver(url.hostname, url.port, url.username, url.password)
         elif url.scheme == "ssh":
-            self.connect_ssh(url.host, url.port, url.auth)
+            self.connect_ssh(url.hostname, url.port, url.username)
         elif url.scheme == "fake":
-            self.connect_fake(url.host, url.port, url.auth)
+            self.connect_fake()
         else:
             raise NotFound("Invalid CVS origin URL '%s'" % url)
 

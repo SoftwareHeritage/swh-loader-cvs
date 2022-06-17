@@ -14,12 +14,12 @@ import subprocess
 import tempfile
 import time
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple, cast
+from urllib.parse import urlparse
 
 import sentry_sdk
 from tenacity import retry
 from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
-from urllib3.util import parse_url
 
 from swh.loader.core.loader import BaseLoader
 from swh.loader.core.utils import clean_dangling_folders
@@ -387,7 +387,7 @@ class CvsLoader(BaseLoader):
             prefix=TEMPORARY_DIR_PREFIX_PATTERN,
             dir=self.temp_directory,
         )
-        url = parse_url(self.origin.url)
+        url = urlparse(self.origin.url)
         self.log.debug(
             "prepare; origin_url=%s scheme=%s path=%s",
             self.origin.url,
@@ -411,7 +411,8 @@ class CvsLoader(BaseLoader):
                 if not os.path.exists(url.path):
                     raise NotFound
             elif url.scheme == "rsync":
-                self.fetch_cvs_repo_with_rsync(url.host, url.path)
+                assert url.hostname is not None
+                self.fetch_cvs_repo_with_rsync(url.hostname, url.path)
 
             have_rcsfile = False
             have_cvsroot = False
@@ -487,7 +488,7 @@ class CvsLoader(BaseLoader):
             cvsroot_path = os.path.dirname(url.path)
             self.log.debug(
                 "Fetching CVS rlog from %s:%s/%s",
-                url.host,
+                url.hostname,
                 cvsroot_path,
                 self.cvs_module_name,
             )
