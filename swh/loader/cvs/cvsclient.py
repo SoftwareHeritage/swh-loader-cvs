@@ -12,6 +12,10 @@ import socket
 import subprocess
 import tempfile
 
+from tenacity import retry
+from tenacity.retry import retry_if_exception_type
+from tenacity.stop import stop_after_attempt
+
 from swh.loader.exception import NotFound
 
 CVS_PSERVER_PORT = 2401
@@ -86,6 +90,14 @@ class CVSProtocolError(Exception):
 
 
 class CVSClient:
+
+    # connection to an existing pserver might sometimes fail,
+    # retrying the operation usually fixes the issue
+    @retry(
+        retry=retry_if_exception_type(NotFound),
+        stop=stop_after_attempt(max_attempt_number=3),
+        reraise=True,
+    )
     def connect_pserver(self, hostname, port, username, password):
         if port is None:
             port = CVS_PSERVER_PORT
