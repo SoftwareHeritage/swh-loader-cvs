@@ -52,21 +52,6 @@ from typing import BinaryIO, Dict, List, NamedTuple, Optional, Tuple
 
 from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey
 
-# There is no known encoding of path names in CVS. The actual encoding used
-# will depend on the CVS server's operating system and perhaps even the
-# underlying filesystem used to host a CVS repository.
-# It is even conceivable that a given repository may use multiple encodings,
-# e.g. due to migrations of the repository between different servers over time.
-#
-# This issue also affects the CVS network protocol which is communicating
-# paths between the CVS server and the CVS client. For this reason, most
-# public-facing repositories should stick to ASCII in practice.
-#
-# TODO: If known, the actual path encoding used by the repository should
-# be specified as a parameter. This parameter should be a list since
-# multiple encodings may be present in a given repository.
-path_encodings = ["ascii", "utf-8"]
-
 
 class revtuple(NamedTuple):
     number: str
@@ -84,11 +69,11 @@ class RlogConv:
         self.fuzzsec = fuzzsec
         self.changesets: Dict[ChangeSetKey, ChangeSetKey] = dict()
         self.tags: Dict[str, ChangeSetKey] = dict()
-        self.offsets: Dict[str, Dict[str, int]] = dict()
+        self.offsets: Dict[bytes, Dict[str, int]] = dict()
 
     def _process_rlog_revisions(
         self,
-        path: str,
+        path: bytes,
         taginfo: Dict[bytes, bytes],
         revisions: Dict[str, revtuple],
         logmsgs: Dict[str, Optional[bytes]],
@@ -227,20 +212,9 @@ class RlogConv:
             filename, branch, taginfo, lockinfo, errmsg, eof = _parse_log_header(fp)
             revisions: Dict[str, revtuple] = {}
             logmsgs: Dict[str, Optional[bytes]] = {}
-            path = ""
+            path = b""
             if filename:
-                # There is no known encoding of filenames in CVS.
-                # Attempt to decode the path with our list of known encodings.
-                # If none of them work, forcefully decode the path assuming
-                # the final path encoding provided in the list.
-                for i, e in enumerate(path_encodings):
-                    try:
-                        how = "ignore" if i == len(path_encodings) - 1 else "strict"
-                        fname = filename.decode(e, how)
-                        break
-                    except UnicodeError:
-                        pass
-                path = fname
+                path = filename
             elif not eof:
                 raise ValueError("No filename found in rlog header")
             while not eof:
@@ -257,7 +231,7 @@ class RlogConv:
 
             self._process_rlog_revisions(path, taginfo, revisions, logmsgs)
 
-    def getlog(self, fp: BinaryIO, path: str, rev: str) -> Optional[bytes]:
+    def getlog(self, fp: BinaryIO, path: bytes, rev: str) -> Optional[bytes]:
         off = self.offsets[path][rev]
         fp.seek(off)
         _rev, logmsg, eof = _parse_log_entry(fp)

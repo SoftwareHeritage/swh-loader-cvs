@@ -1257,3 +1257,34 @@ def test_cvs_client_connect_pserver(mocker, pserver_url):
 
     # check cvs client can be instantiated without errors
     CVSClient(parsed_url)
+
+
+@pytest.mark.parametrize("protocol", ["rsync", "pserver"])
+def test_loader_cvs_with_non_utf8_directory_paths(
+    swh_storage, datadir, tmp_path, protocol
+):
+    archive_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/greek-tree"  # CVS module name
+
+    protocol_prefix = "file://"
+    if protocol == "pserver":
+        protocol_prefix = "fake://"
+        repo_url = repo_url.replace("file://", protocol_prefix)
+
+    for root, _, files in os.walk(repo_url.replace(protocol_prefix, "")):
+        for file in files:
+            # clone existing file in repository but makes it path non UTF-8 encoded
+            filepath = os.path.join(root, file)
+            with open(filepath, "rb") as f:
+                filecontent = f.read()
+            filepath = root.encode() + ("é" + file).encode("iso-8859-1")
+            with open(filepath, "wb") as f:
+                f.write(filecontent)
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}

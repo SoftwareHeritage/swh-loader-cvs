@@ -11,6 +11,7 @@ import os.path
 import socket
 import subprocess
 import tempfile
+from typing import Tuple
 
 from tenacity import retry
 from tenacity.retry import retry_if_exception_type
@@ -83,6 +84,28 @@ def scramble_password(password):
     for c in password:
         s.append("%c" % scramble_shifts[ord(c)])
     return "".join(s)
+
+
+def decode_path(path: bytes) -> Tuple[str, str]:
+    """Attempt to decode a file path based on encodings known to be used
+    in CVS repositories that can be found in the wild.
+
+    Args:
+        path: raw bytes path
+
+    Returns:
+        A tuple (decoded path, encoding)
+
+    """
+    path_encodings = ["ascii", "iso-8859-1", "utf-8"]
+    for encoding in path_encodings:
+        try:
+            how = "ignore" if encoding == path_encodings[-1] else "strict"
+            path_str = path.decode(encoding, how)
+            break
+        except UnicodeError:
+            pass
+    return path_str, encoding
 
 
 class CVSProtocolError(Exception):
@@ -207,8 +230,8 @@ class CVSClient:
             return self.ssh.stdin.flush()
         raise Exception("No valid connection")
 
-    def conn_write_str(self, s):
-        return self.conn_write(s.encode("UTF-8"))
+    def conn_write_str(self, s, encoding="utf-8"):
+        return self.conn_write(s.encode(encoding))
 
     def conn_close(self):
         if self.socket:
@@ -292,8 +315,12 @@ class CVSClient:
         rlog_output.seek(0)
         return rlog_output
 
-    def fetch_rlog(self, path="", state=""):
-        path_arg = path or self.cvs_module_name
+    def fetch_rlog(self, path: bytes = b"", state=""):
+        if path:
+            path_arg, encoding = decode_path(path)
+        else:
+            path_arg, encoding = self.cvs_module_name, "utf-8"
+
         if len(state) > 0:
             state_arg = "Argument -s%s\n" % state
         else:
@@ -304,7 +331,8 @@ class CVSClient:
             f"{state_arg}"
             "Argument --\n"
             f"Argument {path_arg}\n"
-            "rlog\n"
+            "rlog\n",
+            encoding=encoding,
         )
         while True:
             response = self.conn_read_line()
@@ -325,7 +353,7 @@ class CVSClient:
         fp.seek(0)
         return self._parse_rlog_response(fp)
 
-    def checkout(self, path, rev, dest_dir, expand_keywords):
+    def checkout(self, path: bytes, rev: str, dest_dir: bytes, expand_keywords: bool):
         """
         Download a file revision from the cvs server and store
         the file's contents in a temporary file. If expand_keywords is
@@ -342,15 +370,18 @@ class CVSClient:
         expect_bytecount = False
         have_bytecount = False
         bytecount = 0
-        dirname = os.path.dirname(path)
+
+        path_str, encoding = decode_path(path)
+
+        dirname = os.path.dirname(path_str)
         if dirname:
             self.conn_write_str(
                 "Directory %s\n%s\n"
                 % (dirname, os.path.join(self.cvsroot_path, dirname))
             )
-        filename = os.path.basename(path)
+        filename = os.path.basename(path_str)
         co_output = tempfile.NamedTemporaryFile(
-            dir=dest_dir,
+            dir=os.fsdecode(dest_dir),
             delete=True,
             prefix="cvsclient-checkout-%s-r%s-" % (filename, rev),
         )
@@ -372,8 +403,9 @@ class CVSClient:
                 os.path.join(self.cvsroot_path, self.cvs_module_name),
                 rev,
                 karg,
-                path,
-            )
+                path_str,
+            ),
+            encoding=encoding,
         )
         while True:
             if have_bytecount:

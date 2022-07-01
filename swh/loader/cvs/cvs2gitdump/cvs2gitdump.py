@@ -248,7 +248,7 @@ def output(*args, end='\n') -> None:
 
 
 class FileRevision:
-    def __init__(self, path: str, rev: str, state: str, markseq: int) -> None:
+    def __init__(self, path: bytes, rev: str, state: str, markseq: int) -> None:
         self.path = path
         self.rev = rev
         self.state = state
@@ -336,7 +336,7 @@ class ChangeSetKey:
     def __hash__(self) -> int:
         return hash(self.branch + '/' + self.author) * 31 + self.log_hash
 
-    def put_file(self, path: str, rev: str, state: str, markseq: int):
+    def put_file(self, path: bytes, rev: str, state: str, markseq: int):
         self.revs.append(FileRevision(path, rev, state, markseq))
 
 
@@ -363,19 +363,19 @@ class CvsConv:
             p.append(module)
         path = os.path.join(*p)
 
-        for root, dirs, files in os.walk(path):
-            if '.git' in dirs:
+        for root, dirs, files in os.walk(os.fsencode(path)):
+            if b'.git' in dirs:
                 print('Ignore %s: cannot handle the path named \'.git\'' % (
-                      root + os.sep + '.git'), file=sys.stderr)
-                dirs.remove('.git')
-            if '.git' in files:
+                      os.path.join(root, b'.git')), file=sys.stderr)
+                dirs.remove(b'.git')
+            if b'.git' in files:
                 print('Ignore %s: cannot handle the path named \'.git\'' % (
-                      root + os.sep + '.git'), file=sys.stderr)
-                files.remove('.git')
+                      os.path.join(root, b'.git')), file=sys.stderr)
+                files.remove(b'.git')
             for f in files:
-                if not f[-2:] == ',v':
+                if not f[-2:] == b',v':
                     continue
-                self.parse_file(root + os.sep + f)
+                self.parse_file(os.path.join(root, f))
 
         for t, c in list(self.tags.items()):
             c.tags.append(t)
@@ -461,16 +461,16 @@ class CvsConv:
                         self.tags[t] = a
 
 
-def file_path(r: str, p: str) -> str:
-    if r.endswith('/'):
+def file_path(r: bytes, p: bytes) -> bytes:
+    if r.endswith(b'/'):
         r = r[:-1]
-    if p[-2:] == ',v':
+    if p[-2:] == b',v':
         path = p[:-2]               # drop ",v"
     else:
         path = p
-    p_ = path.split('/')
-    if len(p_) > 0 and p_[-2] == 'Attic':
-        path = '/'.join(p_[:-2] + [p_[-1]])
+    p_ = path.split(b'/')
+    if len(p_) > 0 and p_[-2] == b'Attic':
+        path = b'/'.join(p_[:-2] + [p_[-1]])
     if path.startswith(r):
         path = path[len(r) + 1:]
     return path
@@ -566,7 +566,7 @@ class RcsKeywords:
                 fl |= self.RCS_KWEXP_ERR
         return fl
 
-    def expand_keyword(self, filename: str, rcs: rcsparse.rcsfile, r: str, excluded_keywords: List[str]) -> bytes:
+    def expand_keyword(self, filename: str, rcs: rcsparse.rcsfile, r: str, excluded_keywords: List[str], filename_encoding="utf-8") -> bytes:
         """
         Check out a file with keywords expanded. Expansion rules are specific
         to each keyword, and some cases specific to undocumented behaviour of CVS.
@@ -698,9 +698,9 @@ class RcsKeywords:
                 if (mode & self.RCS_KWEXP_NAME) != 0:
                     expbuf += '$'
                 if logbuf is not None:
-                    ret.append(prefix + expbuf.encode('ascii') + b'\n' + logbuf)
+                    ret.append(prefix + expbuf.encode(filename_encoding) + b'\n' + logbuf)
                 else:
-                    line0 += prefix + expbuf[:255].encode('ascii')
+                    line0 += prefix + expbuf[:255].encode(filename_encoding)
                 m = self.re_kw.match(next_match_segment)
                 if m:
                     line = next_match_segment
