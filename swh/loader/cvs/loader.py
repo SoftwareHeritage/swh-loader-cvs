@@ -99,9 +99,9 @@ class CvsLoader(BaseLoader):
         temp_directory: str = "/tmp",
         **kwargs: Any,
     ):
-        self.cvsroot_url = url
+        self.cvsroot_url = url.rstrip("/")
         # origin url as unique identifier for origin in swh archive
-        origin_url = origin_url if origin_url else self.cvsroot_url
+        origin_url = origin_url.rstrip("/") if origin_url else self.cvsroot_url
         super().__init__(storage=storage, origin_url=origin_url, **kwargs)
         self.temp_directory = temp_directory
 
