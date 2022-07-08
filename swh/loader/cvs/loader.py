@@ -356,7 +356,7 @@ class CvsLoader(BaseLoader):
         # URL *must* end with a trailing slash in order to get CVSROOT listed
         url = "rsync://%s%s/" % (host, os.path.dirname(path))
         rsync = self.execute_rsync(
-            ["rsync", url], capture_output=True, encoding="ascii"
+            ["rsync", url], capture_output=True, encoding="utf-8"
         )
         have_cvsroot = False
         have_module = False
