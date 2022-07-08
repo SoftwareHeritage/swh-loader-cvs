@@ -1288,3 +1288,45 @@ def test_loader_cvs_with_non_utf8_directory_paths(
     )
 
     assert loader.load() == {"status": "eventful"}
+
+
+CPMIXIN_SNAPSHOT = Snapshot(
+    id=hash_to_bytes("105b49290a48cc780f5519588ae822e2dd942930"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("658f18d145376f0b71716649602752b509cfdbd4"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+
+@pytest.mark.parametrize("protocol", ["rsync", "pserver"])
+def test_loader_cvs_with_rev_numbers_greater_than_one(
+    swh_storage, datadir, tmp_path, protocol
+):
+    archive_name = "cpmixin"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/cpmixin"  # CVS module name
+
+    protocol_prefix = "file://"
+    if protocol == "pserver":
+        protocol_prefix = "fake://"
+        repo_url = repo_url.replace("file://", protocol_prefix)
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=CPMIXIN_SNAPSHOT.id,
+    )
+
+    check_snapshot(CPMIXIN_SNAPSHOT, loader.storage)

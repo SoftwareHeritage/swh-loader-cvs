@@ -45,6 +45,7 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 import calendar
+from collections import defaultdict
 import re
 import string
 import time
@@ -79,7 +80,7 @@ class RlogConv:
         logmsgs: Dict[str, Optional[bytes]],
     ) -> None:
         """Convert RCS revision history of a file into self.changesets items"""
-        rtags: Dict[str, List[str]] = dict()
+        rtags: Dict[str, List[str]] = defaultdict(list)
         # RCS and CVS represent branches by adding digits to revision numbers.
         # And CVS assigns special meaning to certain revision number ranges.
         #
@@ -121,23 +122,21 @@ class RlogConv:
         # This allows CVS to store information about a branch's existence
         # before any files on this branch have been modified.
         # Even-numbered branch revisions appear once the file is modified.
+
         branches = {"1": "HEAD", "1.1.1": "VENDOR"}
 
-        k: str
-        v_: str
-        for k, v_ in list(taginfo.items()):  # type: ignore  # FIXME, inconsistent types
-            r = v_.split(".")
+        for k_, v_ in taginfo.items():
+            v_str = v_.decode()
+            r = v_str.split(".")
             if len(r) == 3:
                 # vendor branch number
-                branches[v_] = "VENDOR"
+                branches[v_str] = "VENDOR"
             elif len(r) >= 3 and r[-2] == "0":
                 # magic branch number
-                branches[".".join(r[:-2] + r[-1:])] = k
-            if len(r) == 2 and branches[r[0]] == "HEAD":
+                branches[".".join(r[:-2] + r[-1:])] = k_.decode()
+            elif len(r) == 2 and branches.get(r[0]) == "HEAD":
                 # main branch number
-                if v_ not in rtags:
-                    rtags[v_] = list()
-                rtags[v_].append(k)
+                rtags[v_str].append(k_.decode())
 
         revs: List[Tuple[str, revtuple]] = list(revisions.items())
         # sort by revision descending to priorize 1.1.1.1 than 1.1
@@ -167,6 +166,8 @@ class RlogConv:
                     continue
                 last_vendor_status = v[3]
             elif len(r) == 2:
+                # ensure revision targets head branch
+                branches[r[0]] = "HEAD"
                 if r[0] == "1" and r[1] == "1":
                     if have_initial_revision:
                         continue
@@ -308,7 +309,7 @@ def _parse_log_header(
             break
 
         if state == 1:
-            if line[0] == b"\t":
+            if line.startswith(b"\t"):
                 [tag, rev] = [x.strip() for x in line.split(b":")]
                 taginfo[tag] = rev
             else:
@@ -316,7 +317,7 @@ def _parse_log_header(
                 state = 0
 
         if state == 2:
-            if line[0] == b"\t":
+            if line.startswith(b"\t"):
                 [locker, rev] = [x.strip() for x in line.split(b":")]
                 lockinfo[rev] = locker
             else:

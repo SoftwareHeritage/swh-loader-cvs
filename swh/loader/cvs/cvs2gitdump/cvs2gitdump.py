@@ -30,6 +30,7 @@
 #   % git --git-dir /git/openbsd.git fast-import < openbsd2.dump
 #
 
+from collections import defaultdict
 import copy
 import getopt
 import os
@@ -381,18 +382,18 @@ class CvsConv:
             c.tags.append(t)
 
     def parse_file(self, path: str) -> None:
-        rtags: Dict[str, List[str]] = dict()
+        rtags: Dict[str, List[str]] = defaultdict(list)
         rcsfile = rcsparse.rcsfile(path)
+
         branches = {'1': 'HEAD', '1.1.1': 'VENDOR'}
+
         for k, v_ in list(rcsfile.symbols.items()):
             r = v_.split('.')
             if len(r) == 3:
                 branches[v_] = 'VENDOR'
             elif len(r) >= 3 and r[-2] == '0':
                 branches['.'.join(r[:-2] + r[-1:])] = k
-            if len(r) == 2 and branches[r[0]] == 'HEAD':
-                if v_ not in rtags:
-                    rtags[v_] = list()
+            elif len(r) == 2 and branches.get(r[0]) == 'HEAD':
                 rtags[v_].append(k)
 
         revs: List[Tuple[str, Tuple[str, int, str, str, List[str], str, str]]] = list(rcsfile.revs.items())
@@ -418,6 +419,8 @@ class CvsConv:
                     continue
                 last_vendor_status = v[3]
             elif len(r) == 2:
+                # ensure revision targets head branch
+                branches[r[0]] = 'HEAD'
                 if r[0] == '1' and r[1] == '1':
                     if have_initial_revision:
                         continue
