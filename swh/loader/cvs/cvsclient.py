@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2021  The Software Heritage developers
+# Copyright (C) 2015-2022  The Software Heritage developers
 # See the AUTHORS file at the top-level directory of this distribution
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
@@ -11,6 +11,11 @@ import os.path
 import socket
 import subprocess
 import tempfile
+from typing import Tuple
+
+from tenacity import retry
+from tenacity.retry import retry_if_exception_type
+from tenacity.stop import stop_after_attempt
 
 from swh.loader.exception import NotFound
 
@@ -81,25 +86,47 @@ def scramble_password(password):
     return "".join(s)
 
 
+def decode_path(path: bytes) -> Tuple[str, str]:
+    """Attempt to decode a file path based on encodings known to be used
+    in CVS repositories that can be found in the wild.
+
+    Args:
+        path: raw bytes path
+
+    Returns:
+        A tuple (decoded path, encoding)
+
+    """
+    path_encodings = ["ascii", "iso-8859-1", "utf-8"]
+    for encoding in path_encodings:
+        try:
+            how = "ignore" if encoding == path_encodings[-1] else "strict"
+            path_str = path.decode(encoding, how)
+            break
+        except UnicodeError:
+            pass
+    return path_str, encoding
+
+
 class CVSProtocolError(Exception):
     pass
 
 
 class CVSClient:
-    def connect_pserver(self, hostname, port, auth):
+
+    # connection to an existing pserver might sometimes fail,
+    # retrying the operation usually fixes the issue
+    @retry(
+        retry=retry_if_exception_type(NotFound),
+        stop=stop_after_attempt(max_attempt_number=3),
+        reraise=True,
+    )
+    def connect_pserver(self, hostname, port, username, password):
         if port is None:
             port = CVS_PSERVER_PORT
-        if auth is None:
+        if username is None:
             raise NotFound(
-                "Username and password are required for "
-                "a pserver connection: %s" % EXAMPLE_PSERVER_URL
-            )
-        try:
-            user = auth.split(":")[0]
-            password = auth.split(":")[1]
-        except IndexError:
-            raise NotFound(
-                "Username and password are required for "
+                "Username is required for "
                 "a pserver connection: %s" % EXAMPLE_PSERVER_URL
             )
 
@@ -108,10 +135,11 @@ class CVSClient:
         except ConnectionRefusedError:
             raise NotFound("Could not connect to %s:%s", hostname, port)
 
-        scrambled_password = scramble_password(password)
+        # use empty password if it is None
+        scrambled_password = scramble_password(password or "")
         request = "BEGIN AUTH REQUEST\n%s\n%s\n%s\nEND AUTH REQUEST\n" % (
             self.cvsroot_path,
-            user,
+            username,
             scrambled_password,
         )
         print("Request: %s\n" % request)
@@ -124,13 +152,13 @@ class CVSClient:
                 % (hostname, port, response)
             )
 
-    def connect_ssh(self, hostname, port, auth):
+    def connect_ssh(self, hostname, port, username):
         command = ["ssh"]
-        if auth is not None:
+        if username is not None:
             # Assume 'auth' contains only a user name.
             # We do not support password authentication with SSH since the
             # anoncvs user is usually granted access without a password.
-            command += ["-l", "%s" % auth]
+            command += ["-l", "%s" % username]
         if port is not None:
             command += ["-p", "%d" % port]
 
@@ -150,7 +178,7 @@ class CVSClient:
             command, bufsize=0, stdin=subprocess.PIPE, stdout=subprocess.PIPE
         )
 
-    def connect_fake(self, hostname, port, auth):
+    def connect_fake(self):
         command = ["cvs", "server"]
         # use non-buffered I/O to match behaviour of self.socket
         self.ssh = subprocess.Popen(
@@ -202,8 +230,8 @@ class CVSClient:
             return self.ssh.stdin.flush()
         raise Exception("No valid connection")
 
-    def conn_write_str(self, s):
-        return self.conn_write(s.encode("UTF-8"))
+    def conn_write_str(self, s, encoding="utf-8"):
+        return self.conn_write(s.encode(encoding))
 
     def conn_close(self):
         if self.socket:
@@ -222,7 +250,7 @@ class CVSClient:
         Connect to a CVS server at the specified URL and perform the initial
         CVS protocol handshake.
         """
-        self.hostname = url.host
+        self.hostname = url.hostname
         self.cvsroot_path = os.path.dirname(url.path)
         self.cvs_module_name = os.path.basename(url.path)
         self.socket = None
@@ -231,11 +259,11 @@ class CVSClient:
         self.incomplete_line = b""
 
         if url.scheme == "pserver":
-            self.connect_pserver(url.host, url.port, url.auth)
+            self.connect_pserver(url.hostname, url.port, url.username, url.password)
         elif url.scheme == "ssh":
-            self.connect_ssh(url.host, url.port, url.auth)
+            self.connect_ssh(url.hostname, url.port, url.username)
         elif url.scheme == "fake":
-            self.connect_fake(url.host, url.port, url.auth)
+            self.connect_fake()
         else:
             raise NotFound("Invalid CVS origin URL '%s'" % url)
 
@@ -287,8 +315,12 @@ class CVSClient:
         rlog_output.seek(0)
         return rlog_output
 
-    def fetch_rlog(self, path="", state=""):
-        path_arg = path or self.cvs_module_name
+    def fetch_rlog(self, path: bytes = b"", state=""):
+        if path:
+            path_arg, encoding = decode_path(path)
+        else:
+            path_arg, encoding = self.cvs_module_name, "utf-8"
+
         if len(state) > 0:
             state_arg = "Argument -s%s\n" % state
         else:
@@ -299,7 +331,8 @@ class CVSClient:
             f"{state_arg}"
             "Argument --\n"
             f"Argument {path_arg}\n"
-            "rlog\n"
+            "rlog\n",
+            encoding=encoding,
         )
         while True:
             response = self.conn_read_line()
@@ -320,7 +353,7 @@ class CVSClient:
         fp.seek(0)
         return self._parse_rlog_response(fp)
 
-    def checkout(self, path, rev, dest_dir, expand_keywords):
+    def checkout(self, path: bytes, rev: str, dest_dir: bytes, expand_keywords: bool):
         """
         Download a file revision from the cvs server and store
         the file's contents in a temporary file. If expand_keywords is
@@ -337,12 +370,18 @@ class CVSClient:
         expect_bytecount = False
         have_bytecount = False
         bytecount = 0
-        dirname = os.path.dirname(path)
+
+        path_str, encoding = decode_path(path)
+
+        dirname = os.path.dirname(path_str)
         if dirname:
-            self.conn_write_str("Directory %s\n%s\n" % (dirname, dirname))
-        filename = os.path.basename(path)
+            self.conn_write_str(
+                "Directory %s\n%s\n"
+                % (dirname, os.path.join(self.cvsroot_path, dirname))
+            )
+        filename = os.path.basename(path_str)
         co_output = tempfile.NamedTemporaryFile(
-            dir=dest_dir,
+            dir=os.fsdecode(dest_dir),
             delete=True,
             prefix="cvsclient-checkout-%s-r%s-" % (filename, rev),
         )
@@ -359,7 +398,14 @@ class CVSClient:
             "Argument -r%s\n"
             "%s"
             "Argument --\nArgument %s\nco \n"
-            % (self.cvs_module_name, self.cvs_module_name, rev, karg, path)
+            % (
+                self.cvs_module_name,
+                os.path.join(self.cvsroot_path, self.cvs_module_name),
+                rev,
+                karg,
+                path_str,
+            ),
+            encoding=encoding,
         )
         while True:
             if have_bytecount:
