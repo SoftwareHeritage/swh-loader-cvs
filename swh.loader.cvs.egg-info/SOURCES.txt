@@ -60,6 +60,7 @@ swh/loader/cvs/rcsparse/test.rb
 swh/loader/cvs/rcsparse/tree.h
 swh/loader/cvs/tests/test_loader.py
 swh/loader/cvs/tests/test_tasks.py
+swh/loader/cvs/tests/data/cpmixin.tgz
 swh/loader/cvs/tests/data/dino-commitid.tgz
 swh/loader/cvs/tests/data/dino-readded-file.tgz
 swh/loader/cvs/tests/data/greek-repository.tgz

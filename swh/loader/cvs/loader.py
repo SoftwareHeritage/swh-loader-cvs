@@ -14,12 +14,12 @@ import subprocess
 import tempfile
 import time
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple, cast
+from urllib.parse import urlparse
 
 import sentry_sdk
 from tenacity import retry
 from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
-from urllib3.util import parse_url
 
 from swh.loader.core.loader import BaseLoader
 from swh.loader.core.utils import clean_dangling_folders
@@ -31,7 +31,7 @@ from swh.loader.cvs.cvs2gitdump.cvs2gitdump import (
     RcsKeywords,
     file_path,
 )
-from swh.loader.cvs.cvsclient import CVSClient
+from swh.loader.cvs.cvsclient import CVSClient, decode_path
 import swh.loader.cvs.rcsparse as rcsparse
 from swh.loader.cvs.rlog import RlogConv
 from swh.loader.exception import NotFound
@@ -99,9 +99,9 @@ class CvsLoader(BaseLoader):
         temp_directory: str = "/tmp",
         **kwargs: Any,
     ):
-        self.cvsroot_url = url
+        self.cvsroot_url = url.rstrip("/")
         # origin url as unique identifier for origin in swh archive
-        origin_url = origin_url if origin_url else self.cvsroot_url
+        origin_url = origin_url.rstrip("/") if origin_url else self.cvsroot_url
         super().__init__(storage=storage, origin_url=origin_url, **kwargs)
         self.temp_directory = temp_directory
 
@@ -146,15 +146,13 @@ class CvsLoader(BaseLoader):
         self._last_revision = revision
         return (revision, swh_dir)
 
-    def file_path_is_safe(self, wtpath):
-        if "%s..%s" % (os.path.sep, os.path.sep) in wtpath:
+    def file_path_is_safe(self, wtpath: bytes):
+        tempdir = os.fsencode(self.tempdir_path)
+        if os.fsencode("%s..%s" % (os.path.sep, os.path.sep)) in wtpath:
             # Paths with back-references should not appear
             # in CVS protocol messages or CVS rlog output
             return False
-        elif (
-            os.path.commonpath([self.tempdir_path, os.path.normpath(wtpath)])
-            != self.tempdir_path
-        ):
+        elif os.path.commonpath([tempdir, os.path.normpath(wtpath)]) != tempdir:
             # The path must be a child of our temporary directory.
             return False
         else:
@@ -165,10 +163,10 @@ class CvsLoader(BaseLoader):
     ) -> None:
         assert self.cvsroot_path
         assert self.server_style_cvsroot
-        path = file_path(self.cvsroot_path, f.path)
-        wtpath = os.path.join(self.tempdir_path, path)
+        path = file_path(os.fsencode(self.cvsroot_path), f.path)
+        wtpath = os.path.join(os.fsencode(self.tempdir_path), path)
         if not self.file_path_is_safe(wtpath):
-            raise BadPathException(f"unsafe path found in RCS file: {f.path}")
+            raise BadPathException(f"unsafe path found in RCS file: {f.path!r}")
         self.log.debug("rev %s state %s file %s", f.rev, f.state, f.path)
         if f.state == "dead":
             # remove this file from work tree
@@ -194,7 +192,10 @@ class CvsLoader(BaseLoader):
             # a distinct origin, but will hopefully point at the same SWH snapshot.
             # In any case, an absolute path based on the origin URL looks nicer than
             # an absolute path based on a temporary directory used by the CVS loader.
-            server_style_path = f.path.replace(
+
+            path_str, encoding = decode_path(f.path)
+
+            server_style_path = path_str.replace(
                 self.cvsroot_path, self.server_style_cvsroot
             )
             if server_style_path[0] != "/":
@@ -203,7 +204,11 @@ class CvsLoader(BaseLoader):
             if self.custom_id_keyword is not None:
                 rcs.add_id_keyword(self.custom_id_keyword)
             contents = rcs.expand_keyword(
-                server_style_path, rcsfile, f.rev, self.excluded_keywords
+                server_style_path,
+                rcsfile,
+                f.rev,
+                self.excluded_keywords,
+                filename_encoding=encoding,
             )
             os.makedirs(os.path.dirname(wtpath), exist_ok=True)
             outfile = open(wtpath, mode="wb")
@@ -214,10 +219,10 @@ class CvsLoader(BaseLoader):
         self, k: ChangeSetKey, f: FileRevision, cvsclient: CVSClient
     ):
         assert self.cvsroot_path
-        path = file_path(self.cvsroot_path, f.path)
-        wtpath = os.path.join(self.tempdir_path, path)
+        path = file_path(os.fsencode(self.cvsroot_path), f.path)
+        wtpath = os.path.join(os.fsencode(self.tempdir_path), path)
         if not self.file_path_is_safe(wtpath):
-            raise BadPathException(f"unsafe path found in cvs rlog output: {f.path}")
+            raise BadPathException(f"unsafe path found in cvs rlog output: {f.path!r}")
         self.log.debug("rev %s state %s file %s", f.rev, f.state, f.path)
         if f.state == "dead":
             # remove this file from work tree
@@ -351,7 +356,7 @@ class CvsLoader(BaseLoader):
         # URL *must* end with a trailing slash in order to get CVSROOT listed
         url = "rsync://%s%s/" % (host, os.path.dirname(path))
         rsync = self.execute_rsync(
-            ["rsync", url], capture_output=True, encoding="ascii"
+            ["rsync", url], capture_output=True, encoding="utf-8"
         )
         have_cvsroot = False
         have_module = False
@@ -387,7 +392,7 @@ class CvsLoader(BaseLoader):
             prefix=TEMPORARY_DIR_PREFIX_PATTERN,
             dir=self.temp_directory,
         )
-        url = parse_url(self.origin.url)
+        url = urlparse(self.origin.url)
         self.log.debug(
             "prepare; origin_url=%s scheme=%s path=%s",
             self.origin.url,
@@ -411,18 +416,19 @@ class CvsLoader(BaseLoader):
                 if not os.path.exists(url.path):
                     raise NotFound
             elif url.scheme == "rsync":
-                self.fetch_cvs_repo_with_rsync(url.host, url.path)
+                assert url.hostname is not None
+                self.fetch_cvs_repo_with_rsync(url.hostname, url.path)
 
             have_rcsfile = False
             have_cvsroot = False
-            for root, dirs, files in os.walk(self.cvsroot_path):
-                if "CVSROOT" in dirs:
+            for root, dirs, files in os.walk(os.fsencode(self.cvsroot_path)):
+                if b"CVSROOT" in dirs:
                     have_cvsroot = True
-                    dirs.remove("CVSROOT")
+                    dirs.remove(b"CVSROOT")
                     continue
                 for f in files:
                     filepath = os.path.join(root, f)
-                    if f[-2:] == ",v":
+                    if f[-2:] == b",v":
                         rcsfile = rcsparse.rcsfile(filepath)  # noqa: F841
                         self.log.debug(
                             "Looks like we have data to convert; "
@@ -487,7 +493,7 @@ class CvsLoader(BaseLoader):
             cvsroot_path = os.path.dirname(url.path)
             self.log.debug(
                 "Fetching CVS rlog from %s:%s/%s",
-                url.host,
+                url.hostname,
                 cvsroot_path,
                 self.cvs_module_name,
             )
@@ -499,18 +505,19 @@ class CvsLoader(BaseLoader):
             attic_paths = []
             attic_rlog_files = []
             assert self.cvsroot_path
+            cvsroot_path_bytes = os.fsencode(self.cvsroot_path)
             for k in main_changesets:
                 for changed_file in k.revs:
-                    path = file_path(self.cvsroot_path, changed_file.path)
-                    if path.startswith(self.cvsroot_path):
+                    path = file_path(cvsroot_path_bytes, changed_file.path)
+                    if path.startswith(cvsroot_path_bytes):
                         path = path[
-                            len(os.path.commonpath([self.cvsroot_path, path])) + 1 :
+                            len(os.path.commonpath([cvsroot_path_bytes, path])) + 1 :
                         ]
                     parent_path = os.path.dirname(path)
 
-                    if parent_path.split("/")[-1] == "Attic":
+                    if parent_path.split(b"/")[-1] == b"Attic":
                         continue
-                    attic_path = parent_path + "/Attic"
+                    attic_path = parent_path + b"/Attic"
                     if attic_path in attic_paths:
                         continue
                     attic_paths.append(attic_path)  # avoid multiple visits

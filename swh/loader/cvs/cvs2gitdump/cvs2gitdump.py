@@ -30,6 +30,7 @@
 #   % git --git-dir /git/openbsd.git fast-import < openbsd2.dump
 #
 
+from collections import defaultdict
 import copy
 import getopt
 import os
@@ -248,7 +249,7 @@ def output(*args, end='\n') -> None:
 
 
 class FileRevision:
-    def __init__(self, path: str, rev: str, state: str, markseq: int) -> None:
+    def __init__(self, path: bytes, rev: str, state: str, markseq: int) -> None:
         self.path = path
         self.rev = rev
         self.state = state
@@ -336,7 +337,7 @@ class ChangeSetKey:
     def __hash__(self) -> int:
         return hash(self.branch + '/' + self.author) * 31 + self.log_hash
 
-    def put_file(self, path: str, rev: str, state: str, markseq: int):
+    def put_file(self, path: bytes, rev: str, state: str, markseq: int):
         self.revs.append(FileRevision(path, rev, state, markseq))
 
 
@@ -363,36 +364,36 @@ class CvsConv:
             p.append(module)
         path = os.path.join(*p)
 
-        for root, dirs, files in os.walk(path):
-            if '.git' in dirs:
+        for root, dirs, files in os.walk(os.fsencode(path)):
+            if b'.git' in dirs:
                 print('Ignore %s: cannot handle the path named \'.git\'' % (
-                      root + os.sep + '.git'), file=sys.stderr)
-                dirs.remove('.git')
-            if '.git' in files:
+                      os.path.join(root, b'.git')), file=sys.stderr)
+                dirs.remove(b'.git')
+            if b'.git' in files:
                 print('Ignore %s: cannot handle the path named \'.git\'' % (
-                      root + os.sep + '.git'), file=sys.stderr)
-                files.remove('.git')
+                      os.path.join(root, b'.git')), file=sys.stderr)
+                files.remove(b'.git')
             for f in files:
-                if not f[-2:] == ',v':
+                if not f[-2:] == b',v':
                     continue
-                self.parse_file(root + os.sep + f)
+                self.parse_file(os.path.join(root, f))
 
         for t, c in list(self.tags.items()):
             c.tags.append(t)
 
     def parse_file(self, path: str) -> None:
-        rtags: Dict[str, List[str]] = dict()
+        rtags: Dict[str, List[str]] = defaultdict(list)
         rcsfile = rcsparse.rcsfile(path)
+
         branches = {'1': 'HEAD', '1.1.1': 'VENDOR'}
+
         for k, v_ in list(rcsfile.symbols.items()):
             r = v_.split('.')
             if len(r) == 3:
                 branches[v_] = 'VENDOR'
             elif len(r) >= 3 and r[-2] == '0':
                 branches['.'.join(r[:-2] + r[-1:])] = k
-            if len(r) == 2 and branches[r[0]] == 'HEAD':
-                if v_ not in rtags:
-                    rtags[v_] = list()
+            elif len(r) == 2 and branches.get(r[0]) == 'HEAD':
                 rtags[v_].append(k)
 
         revs: List[Tuple[str, Tuple[str, int, str, str, List[str], str, str]]] = list(rcsfile.revs.items())
@@ -418,6 +419,8 @@ class CvsConv:
                     continue
                 last_vendor_status = v[3]
             elif len(r) == 2:
+                # ensure revision targets head branch
+                branches[r[0]] = 'HEAD'
                 if r[0] == '1' and r[1] == '1':
                     if have_initial_revision:
                         continue
@@ -461,16 +464,16 @@ class CvsConv:
                         self.tags[t] = a
 
 
-def file_path(r: str, p: str) -> str:
-    if r.endswith('/'):
+def file_path(r: bytes, p: bytes) -> bytes:
+    if r.endswith(b'/'):
         r = r[:-1]
-    if p[-2:] == ',v':
+    if p[-2:] == b',v':
         path = p[:-2]               # drop ",v"
     else:
         path = p
-    p_ = path.split('/')
-    if len(p_) > 0 and p_[-2] == 'Attic':
-        path = '/'.join(p_[:-2] + [p_[-1]])
+    p_ = path.split(b'/')
+    if len(p_) > 0 and p_[-2] == b'Attic':
+        path = b'/'.join(p_[:-2] + [p_[-1]])
     if path.startswith(r):
         path = path[len(r) + 1:]
     return path
@@ -566,7 +569,7 @@ class RcsKeywords:
                 fl |= self.RCS_KWEXP_ERR
         return fl
 
-    def expand_keyword(self, filename: str, rcs: rcsparse.rcsfile, r: str, excluded_keywords: List[str]) -> bytes:
+    def expand_keyword(self, filename: str, rcs: rcsparse.rcsfile, r: str, excluded_keywords: List[str], filename_encoding="utf-8") -> bytes:
         """
         Check out a file with keywords expanded. Expansion rules are specific
         to each keyword, and some cases specific to undocumented behaviour of CVS.
@@ -590,6 +593,7 @@ class RcsKeywords:
                 ret.append(line)
                 continue
 
+            expkw = 0
             line0 = b''
             while m is not None:
                 logbuf = None
@@ -697,13 +701,13 @@ class RcsKeywords:
                 if (mode & self.RCS_KWEXP_NAME) != 0:
                     expbuf += '$'
                 if logbuf is not None:
-                    ret.append(prefix + expbuf.encode('ascii') + b'\n' + logbuf)
+                    ret.append(prefix + expbuf.encode(filename_encoding) + b'\n' + logbuf)
                 else:
-                    line0 += prefix + expbuf[:255].encode('ascii')
+                    line0 += prefix + expbuf[:255].encode(filename_encoding)
                 m = self.re_kw.match(next_match_segment)
                 if m:
                     line = next_match_segment
-                    if (mode & self.RCS_KWEXP_NAME) != 0 and (expkw & self.RCS_KW_LOG) == 0 and line0[-1] == ord('$'):
+                    if (mode & self.RCS_KWEXP_NAME) != 0 and expkw and (expkw & self.RCS_KW_LOG) == 0 and line0[-1] == ord('$'):
                         # There is another keyword on this line that needs expansion.
                         # Avoid a double "$$" in the expanded string. This $ terminates
                         # the previous keyword and marks the beginning of the next one.

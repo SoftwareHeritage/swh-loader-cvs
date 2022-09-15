@@ -45,27 +45,13 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 import calendar
+from collections import defaultdict
 import re
 import string
 import time
 from typing import BinaryIO, Dict, List, NamedTuple, Optional, Tuple
 
 from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey
-
-# There is no known encoding of path names in CVS. The actual encoding used
-# will depend on the CVS server's operating system and perhaps even the
-# underlying filesystem used to host a CVS repository.
-# It is even conceivable that a given repository may use multiple encodings,
-# e.g. due to migrations of the repository between different servers over time.
-#
-# This issue also affects the CVS network protocol which is communicating
-# paths between the CVS server and the CVS client. For this reason, most
-# public-facing repositories should stick to ASCII in practice.
-#
-# TODO: If known, the actual path encoding used by the repository should
-# be specified as a parameter. This parameter should be a list since
-# multiple encodings may be present in a given repository.
-path_encodings = ["ascii", "utf-8"]
 
 
 class revtuple(NamedTuple):
@@ -84,17 +70,17 @@ class RlogConv:
         self.fuzzsec = fuzzsec
         self.changesets: Dict[ChangeSetKey, ChangeSetKey] = dict()
         self.tags: Dict[str, ChangeSetKey] = dict()
-        self.offsets: Dict[str, Dict[str, int]] = dict()
+        self.offsets: Dict[bytes, Dict[str, int]] = dict()
 
     def _process_rlog_revisions(
         self,
-        path: str,
+        path: bytes,
         taginfo: Dict[bytes, bytes],
         revisions: Dict[str, revtuple],
         logmsgs: Dict[str, Optional[bytes]],
     ) -> None:
         """Convert RCS revision history of a file into self.changesets items"""
-        rtags: Dict[str, List[str]] = dict()
+        rtags: Dict[str, List[str]] = defaultdict(list)
         # RCS and CVS represent branches by adding digits to revision numbers.
         # And CVS assigns special meaning to certain revision number ranges.
         #
@@ -136,23 +122,21 @@ class RlogConv:
         # This allows CVS to store information about a branch's existence
         # before any files on this branch have been modified.
         # Even-numbered branch revisions appear once the file is modified.
+
         branches = {"1": "HEAD", "1.1.1": "VENDOR"}
 
-        k: str
-        v_: str
-        for k, v_ in list(taginfo.items()):  # type: ignore  # FIXME, inconsistent types
-            r = v_.split(".")
+        for k_, v_ in taginfo.items():
+            v_str = v_.decode()
+            r = v_str.split(".")
             if len(r) == 3:
                 # vendor branch number
-                branches[v_] = "VENDOR"
+                branches[v_str] = "VENDOR"
             elif len(r) >= 3 and r[-2] == "0":
                 # magic branch number
-                branches[".".join(r[:-2] + r[-1:])] = k
-            if len(r) == 2 and branches[r[0]] == "HEAD":
+                branches[".".join(r[:-2] + r[-1:])] = k_.decode()
+            elif len(r) == 2 and branches.get(r[0]) == "HEAD":
                 # main branch number
-                if v_ not in rtags:
-                    rtags[v_] = list()
-                rtags[v_].append(k)
+                rtags[v_str].append(k_.decode())
 
         revs: List[Tuple[str, revtuple]] = list(revisions.items())
         # sort by revision descending to priorize 1.1.1.1 than 1.1
@@ -182,6 +166,8 @@ class RlogConv:
                     continue
                 last_vendor_status = v[3]
             elif len(r) == 2:
+                # ensure revision targets head branch
+                branches[r[0]] = "HEAD"
                 if r[0] == "1" and r[1] == "1":
                     if have_initial_revision:
                         continue
@@ -227,20 +213,9 @@ class RlogConv:
             filename, branch, taginfo, lockinfo, errmsg, eof = _parse_log_header(fp)
             revisions: Dict[str, revtuple] = {}
             logmsgs: Dict[str, Optional[bytes]] = {}
-            path = ""
+            path = b""
             if filename:
-                # There is no known encoding of filenames in CVS.
-                # Attempt to decode the path with our list of known encodings.
-                # If none of them work, forcefully decode the path assuming
-                # the final path encoding provided in the list.
-                for i, e in enumerate(path_encodings):
-                    try:
-                        how = "ignore" if i == len(path_encodings) - 1 else "strict"
-                        fname = filename.decode(e, how)
-                        break
-                    except UnicodeError:
-                        pass
-                path = fname
+                path = filename
             elif not eof:
                 raise ValueError("No filename found in rlog header")
             while not eof:
@@ -257,7 +232,7 @@ class RlogConv:
 
             self._process_rlog_revisions(path, taginfo, revisions, logmsgs)
 
-    def getlog(self, fp: BinaryIO, path: str, rev: str) -> Optional[bytes]:
+    def getlog(self, fp: BinaryIO, path: bytes, rev: str) -> Optional[bytes]:
         off = self.offsets[path][rev]
         fp.seek(off)
         _rev, logmsg, eof = _parse_log_entry(fp)
@@ -334,7 +309,7 @@ def _parse_log_header(
             break
 
         if state == 1:
-            if line[0] == b"\t":
+            if line.startswith(b"\t"):
                 [tag, rev] = [x.strip() for x in line.split(b":")]
                 taginfo[tag] = rev
             else:
@@ -342,7 +317,7 @@ def _parse_log_header(
                 state = 0
 
         if state == 2:
-            if line[0] == b"\t":
+            if line.startswith(b"\t"):
                 [locker, rev] = [x.strip() for x in line.split(b":")]
                 lockinfo[rev] = locker
             else:
