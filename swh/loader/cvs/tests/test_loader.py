@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2021  The Software Heritage developers
+# Copyright (C) 2016-2022  The Software Heritage developers
 # See the AUTHORS file at the top-level directory of this distribution
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
@@ -7,9 +7,11 @@ import os
 import subprocess
 import tempfile
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 import pytest
 
+from swh.loader.cvs.cvsclient import CVSClient
 from swh.loader.cvs.loader import BadPathException, CvsLoader
 from swh.loader.tests import (
     assert_last_visit_matches,
@@ -1236,3 +1238,95 @@ def test_loader_rsync_retry(swh_storage, mocker, tmp_path):
     loader.cvs_module_name = module_name
     loader.cvsroot_path = tmp_path
     loader.fetch_cvs_repo_with_rsync(host, path)
+
+
+@pytest.mark.parametrize(
+    "pserver_url",
+    [
+        "pserver://anonymous:anonymous@cvs.example.org/cvsroot/project/module",
+        "pserver://anonymous@cvs.example.org/cvsroot/project/module",
+    ],
+)
+def test_cvs_client_connect_pserver(mocker, pserver_url):
+    from swh.loader.cvs.cvsclient import socket
+
+    conn = mocker.MagicMock()
+    conn.recv.side_effect = [b"I LOVE YOU\n", b"Valid-requests \n", b"ok\n"]
+    mocker.patch.object(socket, "create_connection").return_value = conn
+    parsed_url = urlparse(pserver_url)
+
+    # check cvs client can be instantiated without errors
+    CVSClient(parsed_url)
+
+
+@pytest.mark.parametrize("protocol", ["rsync", "pserver"])
+def test_loader_cvs_with_non_utf8_directory_paths(
+    swh_storage, datadir, tmp_path, protocol
+):
+    archive_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/greek-tree"  # CVS module name
+
+    protocol_prefix = "file://"
+    if protocol == "pserver":
+        protocol_prefix = "fake://"
+        repo_url = repo_url.replace("file://", protocol_prefix)
+
+    for root, _, files in os.walk(repo_url.replace(protocol_prefix, "")):
+        for file in files:
+            # clone existing file in repository but makes it path non UTF-8 encoded
+            filepath = os.path.join(root, file)
+            with open(filepath, "rb") as f:
+                filecontent = f.read()
+            filepath = root.encode() + ("é" + file).encode("iso-8859-1")
+            with open(filepath, "wb") as f:
+                f.write(filecontent)
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+
+CPMIXIN_SNAPSHOT = Snapshot(
+    id=hash_to_bytes("105b49290a48cc780f5519588ae822e2dd942930"),
+    branches={
+        b"HEAD": SnapshotBranch(
+            target=hash_to_bytes("658f18d145376f0b71716649602752b509cfdbd4"),
+            target_type=TargetType.REVISION,
+        )
+    },
+)
+
+
+@pytest.mark.parametrize("protocol", ["rsync", "pserver"])
+def test_loader_cvs_with_rev_numbers_greater_than_one(
+    swh_storage, datadir, tmp_path, protocol
+):
+    archive_name = "cpmixin"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/cpmixin"  # CVS module name
+
+    protocol_prefix = "file://"
+    if protocol == "pserver":
+        protocol_prefix = "fake://"
+        repo_url = repo_url.replace("file://", protocol_prefix)
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=CPMIXIN_SNAPSHOT.id,
+    )
+
+    check_snapshot(CPMIXIN_SNAPSHOT, loader.storage)

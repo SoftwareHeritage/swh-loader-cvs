@@ -726,8 +726,9 @@ static int
 pyrcsfile_init(struct pyrcsfile *pyrcs, PyObject *args)
 {
 	const char *filename;
+	Py_ssize_t length;
 
-	if (!PyArg_ParseTuple(args, "s", &filename))
+	if (!PyArg_ParseTuple(args, "s#", &filename, &length))
 		return -1;
 
 	pyrcs->rcs = rcsopen(filename);
