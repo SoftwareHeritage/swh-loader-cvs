@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019-2021  The Software Heritage developers
+# Copyright (C) 2019-2022  The Software Heritage developers
 # See the AUTHORS file at the top-level directory of this distribution
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
 
 from io import open
 from os import path
+import sys
 
 from setuptools import Extension, find_packages, setup
 
@@ -35,6 +36,10 @@ def parse_requirements(*names):
                 requirements.append(line)
     return requirements
 
+
+macros = []
+if sys.version_info[:2] >= (3, 10):  # https://github.com/python/cpython/issues/85115
+    macros.append(("PY_SSIZE_T_CLEAN", None))
 
 setup(
     name="swh.loader.cvs",
@@ -76,6 +81,7 @@ setup(
                 "swh/loader/cvs/rcsparse/py-rcsparse.c",
                 "swh/loader/cvs/rcsparse/rcsparse.c",
             ],
+            define_macros=macros,
         )
     ],
 )
