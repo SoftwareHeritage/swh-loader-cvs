@@ -313,9 +313,26 @@ class CvsLoader(BaseLoader):
 
             # TODO: prune empty directories?
             (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
-            (contents, skipped_contents, directories) = from_disk.iter_directory(
-                swh_dir
-            )
+
+            contents: List[Content] = []
+            skipped_contents: List[SkippedContent] = []
+            directories: List[Directory] = []
+
+            for obj_node in swh_dir.collect():
+                obj = obj_node.to_model()  # type: ignore
+                obj_type = obj.object_type
+                if obj_type in (
+                    Content.object_type,
+                    from_disk.DiskBackedContent.object_type,
+                ):
+                    contents.append(obj.with_data())
+                elif obj_type == SkippedContent.object_type:
+                    skipped_contents.append(obj)
+                elif obj_type == Directory.object_type:
+                    directories.append(obj)
+                else:
+                    assert False, obj_type
+
             yield contents, skipped_contents, directories, revision
 
     def pre_cleanup(self) -> None:
