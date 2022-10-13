@@ -339,9 +339,12 @@ class CVSClient:
             if response is None:
                 raise CVSProtocolError("No response from CVS server")
             if response[0:2] == b"E ":
-                if len(path) > 0 and response[-11:] == b" - ignored\n":
+                if len(path) > 0 and (
+                    response.endswith(b" - ignored\n")
+                    or b"could not read RCS file" in response
+                ):
                     response = self.conn_read_line()
-                    if response != b"error  \n":
+                    if response not in (b"error  \n", b"ok\n"):
                         raise CVSProtocolError(
                             "Invalid response from CVS server: %s" % response
                         )
