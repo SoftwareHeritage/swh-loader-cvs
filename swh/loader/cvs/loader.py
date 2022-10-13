@@ -128,6 +128,7 @@ class CvsLoader(BaseLoader):
         self.cvsroot_path = cvsroot_path
         self.custom_id_keyword: Optional[str] = None
         self.excluded_keywords: List[str] = []
+        self.swh_dir = from_disk.Directory()
 
         self.snapshot: Optional[Snapshot] = None
         self.last_snapshot: Optional[Snapshot] = snapshot_get_latest(
@@ -146,12 +147,12 @@ class CvsLoader(BaseLoader):
 
         """
         # Compute SWH revision from the on-disk state
-        swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
         parents: Tuple[Sha1Git, ...]
         if self._last_revision:
             parents = (self._last_revision.id,)
         else:
             parents = ()
+        swh_dir = self.swh_dir[self.cvs_module_name.encode()]
         revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
         self.log.debug("SWH revision ID: %s", hashutil.hash_to_hex(revision.id))
         self._last_revision = revision
@@ -169,6 +170,15 @@ class CvsLoader(BaseLoader):
         else:
             return True
 
+    def add_content(self, path: bytes, wtpath: bytes):
+        path_parts = path.split(b"/")
+        current_path = b""
+        for p in path_parts[:-1]:
+            current_path = os.path.join(current_path, p)
+            if current_path not in self.swh_dir:
+                self.swh_dir[current_path] = from_disk.Directory()
+        self.swh_dir[path] = from_disk.Content.from_file(path=wtpath)
+
     def checkout_file_with_rcsparse(
         self, k: ChangeSetKey, f: FileRevision, rcsfile: rcsparse.rcsfile
     ) -> None:
@@ -185,6 +195,8 @@ class CvsLoader(BaseLoader):
                 os.remove(wtpath)
             except FileNotFoundError:
                 pass
+            if path in self.swh_dir:
+                del self.swh_dir[path]
         else:
             # create, or update, this file in the work tree
             if not rcsfile:
@@ -226,6 +238,8 @@ class CvsLoader(BaseLoader):
             outfile.write(contents)
             outfile.close()
 
+            self.add_content(path, wtpath)
+
     def checkout_file_with_cvsclient(
         self, k: ChangeSetKey, f: FileRevision, cvsclient: CVSClient
     ):
@@ -241,6 +255,8 @@ class CvsLoader(BaseLoader):
                 os.remove(wtpath)
             except FileNotFoundError:
                 pass
+            if path in self.swh_dir:
+                del self.swh_dir[path]
         else:
             dirname = os.path.dirname(wtpath)
             os.makedirs(dirname, exist_ok=True)
@@ -252,6 +268,8 @@ class CvsLoader(BaseLoader):
             except FileNotFoundError:
                 # Well, we have just renamed the file...
                 pass
+
+            self.add_content(path, wtpath)
 
     def process_cvs_changesets(
         self,
