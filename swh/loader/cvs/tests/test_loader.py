@@ -48,6 +48,34 @@ def test_loader_cvs_not_found_no_mock(swh_storage, tmp_path):
     )
 
 
+def test_loader_cvs_ssh_module_not_found(swh_storage, tmp_path, mocker):
+    url = "ssh://anoncvs@anoncvs.example.org/cvsroot/foo"
+
+    mocker.patch("swh.loader.cvs.cvsclient.socket")
+    mocker.patch("swh.loader.cvs.cvsclient.subprocess")
+    from swh.loader.cvs.loader import CVSClient as Client
+
+    conn_read_line = mocker.patch.object(Client, "conn_read_line")
+    conn_read_line.side_effect = [
+        # server response lines when client is initialized
+        b"Valid-requests ",
+        b"ok\n",
+        # server response line when CVS module is missing
+        "E cvs rlog: cannot find module `foo' - ignored\n".encode(),
+    ]
+
+    loader = CvsLoader(swh_storage, url, cvsroot_path=tmp_path)
+
+    assert loader.load() == {"status": "uneventful"}
+
+    assert_last_visit_matches(
+        swh_storage,
+        url,
+        status="not_found",
+        type="cvs",
+    )
+
+
 def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
     """Eventful visit should yield 1 snapshot"""
     archive_name = "runbaby"

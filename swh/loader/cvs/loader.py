@@ -31,7 +31,7 @@ from swh.loader.cvs.cvs2gitdump.cvs2gitdump import (
     RcsKeywords,
     file_path,
 )
-from swh.loader.cvs.cvsclient import CVSClient, decode_path
+from swh.loader.cvs.cvsclient import CVSClient, CVSProtocolError, decode_path
 import swh.loader.cvs.rcsparse as rcsparse
 from swh.loader.cvs.rlog import RlogConv
 from swh.loader.exception import NotFound
@@ -497,8 +497,16 @@ class CvsLoader(BaseLoader):
                 cvsroot_path,
                 self.cvs_module_name,
             )
+            try:
+                main_rlog_file = self.cvsclient.fetch_rlog()
+            except CVSProtocolError as cvs_err:
+                if "cannot find module" in str(cvs_err):
+                    raise NotFound(
+                        f"CVS module named {self.cvs_module_name} cannot be found"
+                    )
+                else:
+                    raise
             self.rlog = RlogConv(cvsroot_path, CHANGESET_FUZZ_SEC)
-            main_rlog_file = self.cvsclient.fetch_rlog()
             self.rlog.parse_rlog(main_rlog_file)
             # Find file deletion events only visible in Attic directories.
             main_changesets = self.rlog.changesets
