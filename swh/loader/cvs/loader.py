@@ -13,7 +13,18 @@ import os.path
 import subprocess
 import tempfile
 import time
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple, cast
+from typing import (
+    Any,
+    BinaryIO,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    TextIO,
+    Tuple,
+    cast,
+)
 from urllib.parse import urlparse
 
 import sentry_sdk
@@ -115,7 +126,7 @@ class CvsLoader(BaseLoader):
         self._visit_status = "full"
         self.visit_date = visit_date or self.visit_date
         self.cvsroot_path = cvsroot_path
-        self.custom_id_keyword = None
+        self.custom_id_keyword: Optional[str] = None
         self.excluded_keywords: List[str] = []
 
         self.snapshot: Optional[Snapshot] = None
@@ -303,7 +314,7 @@ class CvsLoader(BaseLoader):
     def cleanup(self) -> None:
         self.log.debug("cleanup")
 
-    def configure_custom_id_keyword(self, cvsconfig):
+    def configure_custom_id_keyword(self, cvsconfig: TextIO):
         """Parse CVSROOT/config and look for a custom keyword definition.
         There are two different configuration directives in use for this purpose.
 
@@ -322,7 +333,7 @@ class CvsLoader(BaseLoader):
         For example, this disables expansion of the Date and Name keywords:
         KeywordExpand=eDate,Name
         """
-        for line in cvsconfig.readlines():
+        for line in cvsconfig:
             line = line.strip()
             try:
                 (config_key, value) = line.split("=", 1)
@@ -542,11 +553,11 @@ class CvsLoader(BaseLoader):
                 # Combine all the rlog pieces we found and re-parse.
                 fp = tempfile.TemporaryFile()
                 for attic_rlog_file in attic_rlog_files:
-                    for line in attic_rlog_file.readlines():
+                    for line in attic_rlog_file:
                         fp.write(line)
-                        attic_rlog_file.close()
+                    attic_rlog_file.close()
                 main_rlog_file.seek(0)
-                for line in main_rlog_file.readlines():
+                for line in main_rlog_file:
                     fp.write(line)
                 main_rlog_file.close()
                 fp.seek(0)

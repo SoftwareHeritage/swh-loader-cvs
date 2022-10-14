@@ -11,7 +11,7 @@ import os.path
 import socket
 import subprocess
 import tempfile
-from typing import Tuple
+from typing import IO, Tuple
 
 from tenacity import retry
 from tenacity.retry import retry_if_exception_type
@@ -291,12 +291,12 @@ class CVSClient:
     def __del__(self):
         self.conn_close()
 
-    def _parse_rlog_response(self, fp):
+    def _parse_rlog_response(self, fp: IO[bytes]):
         rlog_output = tempfile.TemporaryFile()
         expect_error = False
-        for line in fp.readlines():
+        for line in fp:
             if expect_error:
-                raise CVSProtocolError("CVS server error: %s" % line)
+                raise CVSProtocolError("CVS server error: %r" % line)
             if line == b"ok\n":
                 break
             elif line[0:2] == b"M ":
@@ -311,7 +311,7 @@ class CVSClient:
                 expect_error = True
                 continue
             else:
-                raise CVSProtocolError("Bad CVS protocol response: %s" % line)
+                raise CVSProtocolError("Bad CVS protocol response: %r" % line)
         rlog_output.seek(0)
         return rlog_output
 

@@ -1175,7 +1175,7 @@ def test_loader_cvs_weird_paths_in_rlog(
     rlog_file_path = rlog_file.name
 
     rlog_weird_paths = open(os.path.join(datadir, rlog_unsafe_path))
-    for line in rlog_weird_paths.readlines():
+    for line in rlog_weird_paths:
         rlog_file.write(line.replace("{cvsroot_path}", os.path.dirname(repo_url[7:])))
     rlog_file.close()
     rlog_file_override = open(rlog_file_path, "rb")  # re-open as bytes instead of str
