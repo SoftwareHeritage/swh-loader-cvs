@@ -48,6 +48,34 @@ def test_loader_cvs_not_found_no_mock(swh_storage, tmp_path):
     )
 
 
+def test_loader_cvs_ssh_module_not_found(swh_storage, tmp_path, mocker):
+    url = "ssh://anoncvs@anoncvs.example.org/cvsroot/foo"
+
+    mocker.patch("swh.loader.cvs.cvsclient.socket")
+    mocker.patch("swh.loader.cvs.cvsclient.subprocess")
+    from swh.loader.cvs.loader import CVSClient as Client
+
+    conn_read_line = mocker.patch.object(Client, "conn_read_line")
+    conn_read_line.side_effect = [
+        # server response lines when client is initialized
+        b"Valid-requests ",
+        b"ok\n",
+        # server response line when CVS module is missing
+        "E cvs rlog: cannot find module `foo' - ignored\n".encode(),
+    ]
+
+    loader = CvsLoader(swh_storage, url, cvsroot_path=tmp_path)
+
+    assert loader.load() == {"status": "uneventful"}
+
+    assert_last_visit_matches(
+        swh_storage,
+        url,
+        status="not_found",
+        type="cvs",
+    )
+
+
 def test_loader_cvs_visit(swh_storage, datadir, tmp_path):
     """Eventful visit should yield 1 snapshot"""
     archive_name = "runbaby"
@@ -1147,7 +1175,7 @@ def test_loader_cvs_weird_paths_in_rlog(
     rlog_file_path = rlog_file.name
 
     rlog_weird_paths = open(os.path.join(datadir, rlog_unsafe_path))
-    for line in rlog_weird_paths.readlines():
+    for line in rlog_weird_paths:
         rlog_file.write(line.replace("{cvsroot_path}", os.path.dirname(repo_url[7:])))
     rlog_file.close()
     rlog_file_override = open(rlog_file_path, "rb")  # re-open as bytes instead of str

@@ -13,7 +13,18 @@ import os.path
 import subprocess
 import tempfile
 import time
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Sequence, Tuple, cast
+from typing import (
+    Any,
+    BinaryIO,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    TextIO,
+    Tuple,
+    cast,
+)
 from urllib.parse import urlparse
 
 import sentry_sdk
@@ -31,7 +42,7 @@ from swh.loader.cvs.cvs2gitdump.cvs2gitdump import (
     RcsKeywords,
     file_path,
 )
-from swh.loader.cvs.cvsclient import CVSClient, decode_path
+from swh.loader.cvs.cvsclient import CVSClient, CVSProtocolError, decode_path
 import swh.loader.cvs.rcsparse as rcsparse
 from swh.loader.cvs.rlog import RlogConv
 from swh.loader.exception import NotFound
@@ -115,8 +126,9 @@ class CvsLoader(BaseLoader):
         self._visit_status = "full"
         self.visit_date = visit_date or self.visit_date
         self.cvsroot_path = cvsroot_path
-        self.custom_id_keyword = None
+        self.custom_id_keyword: Optional[str] = None
         self.excluded_keywords: List[str] = []
+        self.swh_dir = from_disk.Directory()
 
         self.snapshot: Optional[Snapshot] = None
         self.last_snapshot: Optional[Snapshot] = snapshot_get_latest(
@@ -135,12 +147,12 @@ class CvsLoader(BaseLoader):
 
         """
         # Compute SWH revision from the on-disk state
-        swh_dir = from_disk.Directory.from_disk(path=os.fsencode(self.worktree_path))
         parents: Tuple[Sha1Git, ...]
         if self._last_revision:
             parents = (self._last_revision.id,)
         else:
             parents = ()
+        swh_dir = self.swh_dir[self.cvs_module_name.encode()]
         revision = self.build_swh_revision(k, logmsg, swh_dir.hash, parents)
         self.log.debug("SWH revision ID: %s", hashutil.hash_to_hex(revision.id))
         self._last_revision = revision
@@ -158,6 +170,15 @@ class CvsLoader(BaseLoader):
         else:
             return True
 
+    def add_content(self, path: bytes, wtpath: bytes):
+        path_parts = path.split(b"/")
+        current_path = b""
+        for p in path_parts[:-1]:
+            current_path = os.path.join(current_path, p)
+            if current_path not in self.swh_dir:
+                self.swh_dir[current_path] = from_disk.Directory()
+        self.swh_dir[path] = from_disk.Content.from_file(path=wtpath)
+
     def checkout_file_with_rcsparse(
         self, k: ChangeSetKey, f: FileRevision, rcsfile: rcsparse.rcsfile
     ) -> None:
@@ -174,6 +195,8 @@ class CvsLoader(BaseLoader):
                 os.remove(wtpath)
             except FileNotFoundError:
                 pass
+            if path in self.swh_dir:
+                del self.swh_dir[path]
         else:
             # create, or update, this file in the work tree
             if not rcsfile:
@@ -215,6 +238,8 @@ class CvsLoader(BaseLoader):
             outfile.write(contents)
             outfile.close()
 
+            self.add_content(path, wtpath)
+
     def checkout_file_with_cvsclient(
         self, k: ChangeSetKey, f: FileRevision, cvsclient: CVSClient
     ):
@@ -230,6 +255,8 @@ class CvsLoader(BaseLoader):
                 os.remove(wtpath)
             except FileNotFoundError:
                 pass
+            if path in self.swh_dir:
+                del self.swh_dir[path]
         else:
             dirname = os.path.dirname(wtpath)
             os.makedirs(dirname, exist_ok=True)
@@ -241,6 +268,8 @@ class CvsLoader(BaseLoader):
             except FileNotFoundError:
                 # Well, we have just renamed the file...
                 pass
+
+            self.add_content(path, wtpath)
 
     def process_cvs_changesets(
         self,
@@ -284,9 +313,26 @@ class CvsLoader(BaseLoader):
 
             # TODO: prune empty directories?
             (revision, swh_dir) = self.compute_swh_revision(k, logmsg)
-            (contents, skipped_contents, directories) = from_disk.iter_directory(
-                swh_dir
-            )
+
+            contents: List[Content] = []
+            skipped_contents: List[SkippedContent] = []
+            directories: List[Directory] = []
+
+            for obj_node in swh_dir.collect():
+                obj = obj_node.to_model()  # type: ignore
+                obj_type = obj.object_type
+                if obj_type in (
+                    Content.object_type,
+                    from_disk.DiskBackedContent.object_type,
+                ):
+                    contents.append(obj.with_data())
+                elif obj_type == SkippedContent.object_type:
+                    skipped_contents.append(obj)
+                elif obj_type == Directory.object_type:
+                    directories.append(obj)
+                else:
+                    assert False, obj_type
+
             yield contents, skipped_contents, directories, revision
 
     def pre_cleanup(self) -> None:
@@ -303,7 +349,7 @@ class CvsLoader(BaseLoader):
     def cleanup(self) -> None:
         self.log.debug("cleanup")
 
-    def configure_custom_id_keyword(self, cvsconfig):
+    def configure_custom_id_keyword(self, cvsconfig: TextIO):
         """Parse CVSROOT/config and look for a custom keyword definition.
         There are two different configuration directives in use for this purpose.
 
@@ -322,7 +368,7 @@ class CvsLoader(BaseLoader):
         For example, this disables expansion of the Date and Name keywords:
         KeywordExpand=eDate,Name
         """
-        for line in cvsconfig.readlines():
+        for line in cvsconfig:
             line = line.strip()
             try:
                 (config_key, value) = line.split("=", 1)
@@ -497,8 +543,16 @@ class CvsLoader(BaseLoader):
                 cvsroot_path,
                 self.cvs_module_name,
             )
+            try:
+                main_rlog_file = self.cvsclient.fetch_rlog()
+            except CVSProtocolError as cvs_err:
+                if "cannot find module" in str(cvs_err):
+                    raise NotFound(
+                        f"CVS module named {self.cvs_module_name} cannot be found"
+                    )
+                else:
+                    raise
             self.rlog = RlogConv(cvsroot_path, CHANGESET_FUZZ_SEC)
-            main_rlog_file = self.cvsclient.fetch_rlog()
             self.rlog.parse_rlog(main_rlog_file)
             # Find file deletion events only visible in Attic directories.
             main_changesets = self.rlog.changesets
@@ -534,11 +588,11 @@ class CvsLoader(BaseLoader):
                 # Combine all the rlog pieces we found and re-parse.
                 fp = tempfile.TemporaryFile()
                 for attic_rlog_file in attic_rlog_files:
-                    for line in attic_rlog_file.readlines():
+                    for line in attic_rlog_file:
                         fp.write(line)
-                        attic_rlog_file.close()
+                    attic_rlog_file.close()
                 main_rlog_file.seek(0)
-                for line in main_rlog_file.readlines():
+                for line in main_rlog_file:
                     fp.write(line)
                 main_rlog_file.close()
                 fp.seek(0)

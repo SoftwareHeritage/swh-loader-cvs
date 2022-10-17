@@ -46,12 +46,15 @@
 
 import calendar
 from collections import defaultdict
+import logging
 import re
 import string
 import time
 from typing import BinaryIO, Dict, List, NamedTuple, Optional, Tuple
 
 from swh.loader.cvs.cvs2gitdump.cvs2gitdump import ChangeSetKey
+
+logger = logging.getLogger(__name__)
 
 
 class revtuple(NamedTuple):
@@ -217,7 +220,9 @@ class RlogConv:
             if filename:
                 path = filename
             elif not eof:
-                raise ValueError("No filename found in rlog header")
+                logger.warning(
+                    "No filename found in rlog header, skipping associated entry"
+                )
             while not eof:
                 off = fp.tell()
                 rev, logmsg, eof = _parse_log_entry(fp)
@@ -230,7 +235,8 @@ class RlogConv:
                     if rev:
                         self.offsets[path][rev[0]] = off
 
-            self._process_rlog_revisions(path, taginfo, revisions, logmsgs)
+            if path:
+                self._process_rlog_revisions(path, taginfo, revisions, logmsgs)
 
     def getlog(self, fp: BinaryIO, path: bytes, rev: str) -> Optional[bytes]:
         off = self.offsets[path][rev]
