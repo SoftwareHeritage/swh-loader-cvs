@@ -14,6 +14,7 @@ def test_cvs_client_rlog_could_not_read_rcs_file(mocker):
     file = "src/README.txt"
 
     mocker.patch("swh.loader.cvs.cvsclient.socket")
+    mocker.patch("swh.loader.cvs.cvsclient.subprocess")
     conn_read_line = mocker.patch.object(CVSClient, "conn_read_line")
     conn_read_line.side_effect = [
         # server response lines when client is initialized
