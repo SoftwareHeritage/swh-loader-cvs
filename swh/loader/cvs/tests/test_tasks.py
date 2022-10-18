@@ -8,12 +8,8 @@ import uuid
 import pytest
 
 from swh.scheduler.model import ListedOrigin, Lister
-from swh.scheduler.utils import create_origin_task_dict
 
-
-@pytest.fixture(autouse=True)
-def celery_worker_and_swh_config(swh_scheduler_celery_worker, swh_config):
-    pass
+NAMESPACE = "swh.loader.cvs"
 
 
 @pytest.fixture
@@ -24,46 +20,24 @@ def cvs_lister():
 @pytest.fixture
 def cvs_listed_origin(cvs_lister):
     return ListedOrigin(
-        lister_id=cvs_lister.id, url="https://cvs.example.org/repo", visit_type="cvs"
+        lister_id=cvs_lister.id,
+        url="rsync://cvs.example.org/cvsroot/module",
+        visit_type="cvs",
     )
 
 
-def test_cvs_loader(
-    mocker,
-    swh_scheduler_celery_app,
-):
-    mock_loader = mocker.patch("swh.loader.cvs.loader.CvsLoader.load")
-    mock_loader.return_value = {"status": "eventful"}
-
-    res = swh_scheduler_celery_app.send_task(
-        "swh.loader.cvs.tasks.LoadCvsRepository",
-        kwargs=dict(
-            url="some-technical-url", origin_url="origin-url", visit_date="now"
-        ),
-    )
-    assert res
-    res.wait()
-    assert res.successful()
-
-    assert res.result == {"status": "eventful"}
-    assert mock_loader.called
-
-
+@pytest.mark.parametrize("extra_loader_arguments", [{}, {"visit_date": "now"}])
 def test_cvs_loader_for_listed_origin(
-    mocker, swh_scheduler_celery_app, cvs_lister, cvs_listed_origin
+    loading_task_creation_for_listed_origin_test,
+    cvs_lister,
+    cvs_listed_origin,
+    extra_loader_arguments,
 ):
-    mock_loader = mocker.patch("swh.loader.cvs.loader.CvsLoader.load")
-    mock_loader.return_value = {"status": "eventful"}
+    cvs_listed_origin.extra_loader_arguments = extra_loader_arguments
 
-    task_dict = create_origin_task_dict(cvs_listed_origin, cvs_lister)
-
-    res = swh_scheduler_celery_app.send_task(
-        "swh.loader.cvs.tasks.LoadCvsRepository",
-        kwargs=task_dict["arguments"]["kwargs"],
+    loading_task_creation_for_listed_origin_test(
+        loader_class_name=f"{NAMESPACE}.loader.CvsLoader",
+        task_function_name=f"{NAMESPACE}.tasks.LoadCvsRepository",
+        lister=cvs_lister,
+        listed_origin=cvs_listed_origin,
     )
-    assert res
-    res.wait()
-    assert res.successful()
-
-    assert res.result == {"status": "eventful"}
-    assert mock_loader.called
