@@ -432,6 +432,13 @@ class CVSClient:
             else:
                 response = self.conn_read_line()
             if response[0:2] == b"E ":
+                if (
+                    b"Skipping `$Log$' keyword due to excessive comment leader"
+                    in response
+                ):
+                    # non fatal error, continue checkout operation without `$Log$'
+                    # keyword expansion
+                    continue
                 raise CVSProtocolError("Error from CVS server: %s" % response)
             if response == b"ok\n":
                 if have_bytecount:
