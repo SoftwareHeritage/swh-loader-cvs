@@ -1,3 +1,13 @@
+swh-loader-cvs (0.6.0-1~swh1) unstable-swh; urgency=medium
+
+  * New upstream release 0.6.0     - (tagged by Antoine R. Dumont
+    (@ardumont) <ardumont@softwareheritage.org> on 2023-03-13 12:17:50
+    +0100)
+  * Upstream changes:     - v0.6.0     - cvsclient: Do not abort
+    checkout when skipping $Log$ keyword expansion
+
+ -- Software Heritage autobuilder (on jenkins-debian1) <jenkins@jenkins-debian1.internal.softwareheritage.org>  Mon, 13 Mar 2023 11:21:26 +0000
+
 swh-loader-cvs (0.5.1-1~swh1) unstable-swh; urgency=medium
 
   * New upstream release 0.5.1     - (tagged by Antoine Lambert
