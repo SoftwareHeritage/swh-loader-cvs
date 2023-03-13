@@ -29,3 +29,42 @@ def test_cvs_client_rlog_could_not_read_rcs_file(mocker):
     client = CVSClient(urlparse(url))
 
     assert client.fetch_rlog(file.encode()) is None
+
+
+def test_cvs_client_checkout_log_kw_expansion_skipped(mocker, tmp_path):
+    url = "ssh://anoncvs@anoncvs.example.org/cvsroot/src"
+
+    file_path = b"src/foo"
+    file_content = b"File with log keyword expansion in it: $Log$"
+    file_rev = b"1.1.1.1"
+
+    mocker.patch("swh.loader.cvs.cvsclient.socket")
+    mocker.patch("swh.loader.cvs.cvsclient.subprocess")
+    conn_read_line = mocker.patch.object(CVSClient, "conn_read_line")
+    conn_read_line.side_effect = [
+        # server response lines when client is initialized
+        b"Valid-requests ",
+        b"ok\n",
+        # server response when attempting to checkout file
+        b"E cvs checkout: Skipping `$Log$' keyword due to excessive comment leader.\n",
+        b"MT +updated\n",
+        b"MT text U \n",
+        b"MT fname " + file_path + b"\n",
+        b"MT newline\n",
+        b"MT -updated\n",
+        b"Created " + file_path + b"\n",
+        file_path + b"\n",
+        b"/foo/" + file_rev + b"///" + file_rev + b"\n",
+        b"u=rw,g=r,o=r\n",
+        str(len(file_content)).encode() + b"\n",
+        file_content,
+        b"ok\n",
+    ]
+
+    client = CVSClient(urlparse(url))
+
+    checkout_file = client.checkout(
+        file_path, file_rev.decode(), tmp_path, expand_keywords=True
+    )
+
+    assert checkout_file.read() == file_content
