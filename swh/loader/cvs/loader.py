@@ -502,9 +502,10 @@ class CvsLoader(BaseLoader):
             # We allow UTF-8 just in case. Other encodings may result in an
             # error and will require manual intervention, for now.
             cvsconfig_path = os.path.join(self.cvsroot_path, "CVSROOT", "config")
-            cvsconfig = open(cvsconfig_path, mode="r", encoding="utf-8")
-            self.configure_custom_id_keyword(cvsconfig)
-            cvsconfig.close()
+            if os.path.exists(cvsconfig_path):
+                cvsconfig = open(cvsconfig_path, mode="r", encoding="utf-8")
+                self.configure_custom_id_keyword(cvsconfig)
+                cvsconfig.close()
 
             # Unfortunately, there is no way to convert CVS history in an
             # iterative fashion because the data is not indexed by any kind

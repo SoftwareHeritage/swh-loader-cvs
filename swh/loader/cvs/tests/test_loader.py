@@ -1358,3 +1358,19 @@ def test_loader_cvs_with_rev_numbers_greater_than_one(
     )
 
     check_snapshot(CPMIXIN_SNAPSHOT, loader.storage)
+
+
+def test_loader_cvs_with_missing_cvs_config_file(swh_storage, datadir, tmp_path):
+    archive_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    config_path = os.path.join(repo_url.replace("file://", ""), "CVSROOT/config")
+
+    assert os.path.exists(config_path)
+    os.remove(config_path)
+    repo_url += "/greek-tree"  # CVS module name
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
