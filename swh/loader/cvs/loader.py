@@ -621,7 +621,6 @@ class CvsLoader(BaseLoader):
         try:
             data = next(self.swh_revision_gen)
         except StopIteration:
-            assert self._last_revision is not None
             self.snapshot = self.generate_and_load_snapshot(self._last_revision)
             self.log.debug(
                 "SWH snapshot ID: %s", hashutil.hash_to_hex(self.snapshot.id)
@@ -673,7 +672,9 @@ class CvsLoader(BaseLoader):
             parents=tuple(parents),
         )
 
-    def generate_and_load_snapshot(self, revision: Revision) -> Snapshot:
+    def generate_and_load_snapshot(
+        self, revision: Optional[Revision] = None
+    ) -> Snapshot:
         """Create the snapshot either from existing revision.
 
         Args:
@@ -684,11 +685,15 @@ class CvsLoader(BaseLoader):
 
         """
         snap = Snapshot(
-            branches={
-                DEFAULT_BRANCH: SnapshotBranch(
-                    target=revision.id, target_type=TargetType.REVISION
-                )
-            }
+            branches=(
+                {
+                    DEFAULT_BRANCH: SnapshotBranch(
+                        target=revision.id, target_type=TargetType.REVISION
+                    )
+                }
+                if revision is not None
+                else {}
+            )
         )
         self.log.debug("snapshot: %s", snap)
         self.storage.snapshot_add([snap])
@@ -709,7 +714,7 @@ class CvsLoader(BaseLoader):
     def load_status(self) -> Dict[str, Any]:
         if self.snapshot is None:
             load_status = "failed"
-        elif self.last_snapshot == self.snapshot:
+        elif self.last_snapshot == self.snapshot or not self.snapshot.branches:
             load_status = "uneventful"
         else:
             load_status = "eventful"

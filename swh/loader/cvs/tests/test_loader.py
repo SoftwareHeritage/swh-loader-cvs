@@ -1391,3 +1391,24 @@ def test_loader_cvs_rsync_not_found(swh_storage, mocker):
         swh_storage.origin_visit_get_with_statuses(origin_url).results[-1].statuses[-1]
     )
     assert visit_status.status == "not_found"
+
+
+def test_loader_cvs_empty_repository(swh_storage, datadir, tmp_path):
+    archive_name = "alizagameapi"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/config"  # CVS module name
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "uneventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=Snapshot(branches={}).id,
+    )
