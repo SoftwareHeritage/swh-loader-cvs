@@ -401,9 +401,14 @@ class CvsLoader(BaseLoader):
     def fetch_cvs_repo_with_rsync(self, host: str, path: str) -> None:
         # URL *must* end with a trailing slash in order to get CVSROOT listed
         url = "rsync://%s%s/" % (host, os.path.dirname(path))
-        rsync = self.execute_rsync(
-            ["rsync", url], capture_output=True, encoding="utf-8"
-        )
+        try:
+            rsync = self.execute_rsync(
+                ["rsync", url], capture_output=True, encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as cpe:
+            if cpe.returncode == 23 and "No such file or directory" in cpe.stderr:
+                raise NotFound("CVS repository not found at {url}")
+            raise
         have_cvsroot = False
         have_module = False
         for line in rsync.stdout.split("\n"):

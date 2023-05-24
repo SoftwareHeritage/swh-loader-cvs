@@ -1374,3 +1374,20 @@ def test_loader_cvs_with_missing_cvs_config_file(swh_storage, datadir, tmp_path)
     )
 
     assert loader.load() == {"status": "eventful"}
+
+
+def test_loader_cvs_rsync_not_found(swh_storage, mocker):
+    origin_url = "rsync://example.org/cvsroot/module"
+    loader = CvsLoader(swh_storage, origin_url)
+    mocker.patch.object(
+        loader, "execute_rsync"
+    ).side_effect = subprocess.CalledProcessError(
+        returncode=23,
+        cmd=["rsync", origin_url],
+        stderr='rsync: change_dir "/module" (in cvsroot) failed: No such file or directory (2)',
+    )
+    assert loader.load() == {"status": "uneventful"}
+    visit_status = (
+        swh_storage.origin_visit_get_with_statuses(origin_url).results[-1].statuses[-1]
+    )
+    assert visit_status.status == "not_found"
