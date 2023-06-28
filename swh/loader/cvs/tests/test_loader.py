@@ -1358,3 +1358,57 @@ def test_loader_cvs_with_rev_numbers_greater_than_one(
     )
 
     check_snapshot(CPMIXIN_SNAPSHOT, loader.storage)
+
+
+def test_loader_cvs_with_missing_cvs_config_file(swh_storage, datadir, tmp_path):
+    archive_name = "greek-repository"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    config_path = os.path.join(repo_url.replace("file://", ""), "CVSROOT/config")
+
+    assert os.path.exists(config_path)
+    os.remove(config_path)
+    repo_url += "/greek-tree"  # CVS module name
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+
+def test_loader_cvs_rsync_not_found(swh_storage, mocker):
+    origin_url = "rsync://example.org/cvsroot/module"
+    loader = CvsLoader(swh_storage, origin_url)
+    mocker.patch.object(
+        loader, "execute_rsync"
+    ).side_effect = subprocess.CalledProcessError(
+        returncode=23,
+        cmd=["rsync", origin_url],
+        stderr='rsync: change_dir "/module" (in cvsroot) failed: No such file or directory (2)',
+    )
+    assert loader.load() == {"status": "uneventful"}
+    visit_status = (
+        swh_storage.origin_visit_get_with_statuses(origin_url).results[-1].statuses[-1]
+    )
+    assert visit_status.status == "not_found"
+
+
+def test_loader_cvs_empty_repository(swh_storage, datadir, tmp_path):
+    archive_name = "alizagameapi"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+    repo_url += "/config"  # CVS module name
+
+    loader = CvsLoader(
+        swh_storage, repo_url, cvsroot_path=os.path.join(tmp_path, archive_name)
+    )
+
+    assert loader.load() == {"status": "uneventful"}
+
+    assert_last_visit_matches(
+        loader.storage,
+        repo_url,
+        status="full",
+        type="cvs",
+        snapshot=Snapshot(branches={}).id,
+    )
