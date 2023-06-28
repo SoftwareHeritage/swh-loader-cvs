@@ -61,6 +61,7 @@ swh/loader/cvs/rcsparse/tree.h
 swh/loader/cvs/tests/test_cvsclient.py
 swh/loader/cvs/tests/test_loader.py
 swh/loader/cvs/tests/test_tasks.py
+swh/loader/cvs/tests/data/alizagameapi.tgz
 swh/loader/cvs/tests/data/cpmixin.tgz
 swh/loader/cvs/tests/data/dino-commitid.tgz
 swh/loader/cvs/tests/data/dino-readded-file.tgz
