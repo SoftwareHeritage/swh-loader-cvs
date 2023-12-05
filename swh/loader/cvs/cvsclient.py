@@ -395,18 +395,16 @@ class CVSClient:
             karg = "Argument -kb\n"
         # TODO: cvs <= 1.10 servers expect to be given every Directory along the path.
         self.conn_write_str(
-            "Directory %s\n%s\n"
             "Global_option -q\n"
-            "Argument -r%s\n"
-            "%s"
-            "Argument --\nArgument %s\nco \n"
-            % (
-                self.cvs_module_name,
-                os.path.join(self.cvsroot_path, self.cvs_module_name),
-                rev,
-                karg,
-                path_str,
-            ),
+            "Argument -N\n"
+            "Argument -P\n"
+            f"Argument -r{rev}\n"
+            f"{karg}"
+            "Argument --\n"
+            f"Argument {path_str}\n"
+            "Directory .\n"
+            f"{os.path.join(self.cvsroot_path, self.cvs_module_name)}\n"
+            "co\n",
             encoding=encoding,
         )
         while True:
