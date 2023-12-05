@@ -113,7 +113,6 @@ class CVSProtocolError(Exception):
 
 
 class CVSClient:
-
     # connection to an existing pserver might sometimes fail,
     # retrying the operation usually fixes the issue
     @retry(

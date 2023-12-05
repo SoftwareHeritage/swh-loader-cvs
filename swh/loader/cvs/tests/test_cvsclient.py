@@ -9,7 +9,6 @@ from swh.loader.cvs.cvsclient import CVSClient
 
 
 def test_cvs_client_rlog_could_not_read_rcs_file(mocker):
-
     url = "ssh://anoncvs@anoncvs.example.org/cvsroot/src"
     file = "src/README.txt"
 
