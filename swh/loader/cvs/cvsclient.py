@@ -356,7 +356,7 @@ class CVSClient:
         fp.seek(0)
         return self._parse_rlog_response(fp)
 
-    def checkout(self, path: bytes, rev: str, dest_dir: bytes, expand_keywords: bool):
+    def checkout(self, path: bytes, rev: str, dest_path: bytes, expand_keywords: bool):
         """
         Download a file revision from the cvs server and store
         the file's contents in a temporary file. If expand_keywords is
@@ -382,12 +382,7 @@ class CVSClient:
                 "Directory %s\n%s\n"
                 % (dirname, os.path.join(self.cvsroot_path, dirname))
             )
-        filename = os.path.basename(path_str)
-        co_output = tempfile.NamedTemporaryFile(
-            dir=os.fsdecode(dest_dir),
-            delete=True,
-            prefix="cvsclient-checkout-%s-r%s-" % (filename, rev),
-        )
+
         if expand_keywords:
             # use server-side per-file default expansion rules
             karg = ""
@@ -408,78 +403,80 @@ class CVSClient:
             "co\n",
             encoding=encoding,
         )
-        while True:
-            if have_bytecount:
-                if bytecount < 0:
-                    raise CVSProtocolError("server sent too much file content data")
-                response = self.conn_read_line(require_newline=False)
-                if response is None:
-                    raise CVSProtocolError("Incomplete response from CVS server")
-                if len(response) > bytecount:
-                    # When a file lacks a final newline we receive a line which
-                    # contains file content as well as CVS protocol response data.
-                    # Split last line of file content from CVS protocol data...
-                    co_output.write(response[:bytecount])
-                    response = response[bytecount:]
-                    bytecount = 0
-                    # ...and process the CVS protocol response below.
-                else:
-                    co_output.write(response)
-                    bytecount -= len(response)
-                    continue
-            else:
-                response = self.conn_read_line()
-            if response[0:2] == b"E ":
-                if (
-                    b"Skipping `$Log$' keyword due to excessive comment leader"
-                    in response
-                ):
-                    # non fatal error, continue checkout operation without `$Log$'
-                    # keyword expansion
-                    continue
-                raise CVSProtocolError("Error from CVS server: %s" % response)
-            if response == b"ok\n":
+
+        with open(dest_path, "wb") as co_output:
+            while True:
                 if have_bytecount:
-                    break
+                    if bytecount < 0:
+                        raise CVSProtocolError("server sent too much file content data")
+                    response = self.conn_read_line(require_newline=False)
+                    if response is None:
+                        raise CVSProtocolError("Incomplete response from CVS server")
+                    if len(response) > bytecount:
+                        # When a file lacks a final newline we receive a line which
+                        # contains file content as well as CVS protocol response data.
+                        # Split last line of file content from CVS protocol data...
+                        co_output.write(response[:bytecount])
+                        response = response[bytecount:]
+                        bytecount = 0
+                        # ...and process the CVS protocol response below.
+                    else:
+                        co_output.write(response)
+                        bytecount -= len(response)
+                        continue
                 else:
-                    raise CVSProtocolError("server sent 'ok' but no file contents")
-            if skip_line:
-                skip_line = False
-                continue
-            elif expect_bytecount:
-                try:
-                    bytecount = int(response[0:-1])  # strip trailing \n
-                except ValueError:
+                    response = self.conn_read_line()
+                if response[0:2] == b"E ":
+                    if (
+                        b"Skipping `$Log$' keyword due to excessive comment leader"
+                        in response
+                    ):
+                        # non fatal error, continue checkout operation without `$Log$'
+                        # keyword expansion
+                        continue
+                    raise CVSProtocolError("Error from CVS server: %s" % response)
+                if response == b"ok\n":
+                    if have_bytecount:
+                        break
+                    else:
+                        raise CVSProtocolError("server sent 'ok' but no file contents")
+                if skip_line:
+                    skip_line = False
+                    continue
+                elif expect_bytecount:
+                    try:
+                        bytecount = int(response[0:-1])  # strip trailing \n
+                    except ValueError:
+                        raise CVSProtocolError(
+                            "Bad CVS protocol response: %s" % response
+                        )
+                    have_bytecount = True
+                    continue
+                elif response in (b"M \n", b"MT +updated\n", b"MT -updated\n"):
+                    continue
+                elif response[0:9] == b"MT fname ":
+                    continue
+                elif response.split(b" ")[0] in (
+                    b"Created",
+                    b"Checked-in",
+                    b"Update-existing",
+                    b"Updated",
+                    b"Removed",
+                ):
+                    skip_line = True
+                    continue
+                elif response[0:1] == b"/":
+                    expect_modeline = True
+                    continue
+                elif expect_modeline and response[0:2] == b"u=":
+                    expect_modeline = False
+                    expect_bytecount = True
+                    continue
+                elif response[0:2] == b"M ":
+                    continue
+                elif response[0:8] == b"MT text ":
+                    continue
+                elif response[0:10] == b"MT newline":
+                    continue
+                else:
                     raise CVSProtocolError("Bad CVS protocol response: %s" % response)
-                have_bytecount = True
-                continue
-            elif response in (b"M \n", b"MT +updated\n", b"MT -updated\n"):
-                continue
-            elif response[0:9] == b"MT fname ":
-                continue
-            elif response.split(b" ")[0] in (
-                b"Created",
-                b"Checked-in",
-                b"Update-existing",
-                b"Updated",
-                b"Removed",
-            ):
-                skip_line = True
-                continue
-            elif response[0:1] == b"/":
-                expect_modeline = True
-                continue
-            elif expect_modeline and response[0:2] == b"u=":
-                expect_modeline = False
-                expect_bytecount = True
-                continue
-            elif response[0:2] == b"M ":
-                continue
-            elif response[0:8] == b"MT text ":
-                continue
-            elif response[0:10] == b"MT newline":
-                continue
-            else:
-                raise CVSProtocolError("Bad CVS protocol response: %s" % response)
-        co_output.seek(0)
-        return co_output

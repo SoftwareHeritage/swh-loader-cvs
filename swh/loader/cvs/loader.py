@@ -261,13 +261,7 @@ class CvsLoader(BaseLoader):
             dirname = os.path.dirname(wtpath)
             os.makedirs(dirname, exist_ok=True)
             self.log.debug("checkout to %s\n", wtpath)
-            fp = cvsclient.checkout(path, f.rev, dirname, expand_keywords=True)
-            os.rename(fp.name, wtpath)
-            try:
-                fp.close()
-            except FileNotFoundError:
-                # Well, we have just renamed the file...
-                pass
+            cvsclient.checkout(path, f.rev, dest_path=wtpath, expand_keywords=True)
 
             self.add_content(path, wtpath)
 

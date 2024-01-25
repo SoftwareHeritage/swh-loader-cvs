@@ -3,6 +3,7 @@
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
 
+import os
 from urllib.parse import urlparse
 
 from swh.loader.cvs.cvsclient import CVSClient
@@ -62,8 +63,11 @@ def test_cvs_client_checkout_log_kw_expansion_skipped(mocker, tmp_path):
 
     client = CVSClient(urlparse(url))
 
-    checkout_file = client.checkout(
-        file_path, file_rev.decode(), tmp_path, expand_keywords=True
+    dest_path = os.path.join(str(tmp_path).encode(), os.path.basename(file_path))
+
+    client.checkout(
+        file_path, file_rev.decode(), dest_path=dest_path, expand_keywords=True
     )
 
-    assert checkout_file.read() == file_content
+    with open(dest_path, "rb") as checkout_file:
+        assert checkout_file.read() == file_content
