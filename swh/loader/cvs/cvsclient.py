@@ -256,6 +256,7 @@ class CVSClient:
         self.ssh = None
         self.linebuffer = list()
         self.incomplete_line = b""
+        self.tempfile_cutoff = 100 * 1024 * 1024
 
         if url.scheme == "pserver":
             self.connect_pserver(url.hostname, url.port, url.username, url.password)
@@ -291,7 +292,7 @@ class CVSClient:
         self.conn_close()
 
     def _parse_rlog_response(self, fp: IO[bytes]):
-        rlog_output = tempfile.TemporaryFile()
+        rlog_output = tempfile.SpooledTemporaryFile(max_size=self.tempfile_cutoff)
         expect_error = False
         for line in fp:
             if expect_error:
@@ -324,7 +325,7 @@ class CVSClient:
             state_arg = "Argument -s%s\n" % state
         else:
             state_arg = ""
-        fp = tempfile.TemporaryFile()
+        fp = tempfile.SpooledTemporaryFile(max_size=self.tempfile_cutoff)
         self.conn_write_str(
             "Global_option -q\n"
             f"{state_arg}"
