@@ -315,10 +315,7 @@ class CvsLoader(BaseLoader):
             for obj_node in swh_dir.collect():
                 obj = obj_node.to_model()  # type: ignore
                 obj_type = obj.object_type
-                if obj_type in (
-                    Content.object_type,
-                    from_disk.DiskBackedContent.object_type,
-                ):
+                if obj_type == Content.object_type:
                     contents.append(obj.with_data())
                 elif obj_type == SkippedContent.object_type:
                     skipped_contents.append(obj)
