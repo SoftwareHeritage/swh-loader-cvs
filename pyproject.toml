@@ -43,7 +43,7 @@ build-backend = "setuptools.build_meta"
 fallback_version = "0.0.1"
 
 [tool.black]
-target-version = ['py37']
+target-version = ['py39', 'py310', 'py311', 'py312']
 exclude = '^/swh/loader/cvs/(cvsclient.py|rcsparse/|cvs2gitdump/)'
 
 [tool.isort]
