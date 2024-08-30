@@ -895,7 +895,7 @@ def test_loader_cvs_with_header_keyword(swh_storage, datadir, tmp_path):
 
     assert loader2.load() == {"status": "eventful"}
 
-    # We cannot verify the snapshot ID. It is unpredicable due to use of the $Header$
+    # We cannot verify the snapshot ID. It is unpredictable due to use of the $Header$
     # RCS keyword which contains the temporary directory where the repository is stored.
 
     expected_stats = {

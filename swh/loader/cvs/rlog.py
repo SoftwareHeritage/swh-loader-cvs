@@ -142,7 +142,7 @@ class RlogConv:
                 rtags[v_str].append(k_.decode())
 
         revs: List[Tuple[str, revtuple]] = list(revisions.items())
-        # sort by revision descending to priorize 1.1.1.1 than 1.1
+        # sort by revision descending to prioritize 1.1.1.1 than 1.1
         revs.sort(key=lambda a: a[1][0], reverse=True)
         # sort by time
         revs.sort(key=lambda a: a[1][1])
