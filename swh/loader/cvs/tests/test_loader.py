@@ -1196,7 +1196,7 @@ def test_loader_cvs_weird_paths_in_rlog(
     except BadPathException:
         pass
 
-    assert loader.load() == {"status": "failed"}
+    assert loader.load()["status"] == "failed"
 
     assert_last_visit_matches(
         swh_storage,
