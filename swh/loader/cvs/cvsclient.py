@@ -3,9 +3,7 @@
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
 
-"""Minimal CVS client implementation
-
-"""
+"""Minimal CVS client implementation"""
 
 import os.path
 import socket

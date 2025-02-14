@@ -1,4 +1,4 @@
-""" RCS/CVS rlog parser, derived from viewvc and cvs2gitdump.py """
+"""RCS/CVS rlog parser, derived from viewvc and cvs2gitdump.py"""
 
 # Copyright (C) 1999-2021 The ViewCVS Group. All Rights Reserved.
 #
