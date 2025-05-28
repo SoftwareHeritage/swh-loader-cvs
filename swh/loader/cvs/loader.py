@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2022  The Software Heritage developers
+# Copyright (C) 2015-2025  The Software Heritage developers
 # See the AUTHORS file at the top-level directory of this distribution
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
@@ -177,7 +177,9 @@ class CvsLoader(BaseLoader):
             current_path = os.path.join(current_path, p)
             if current_path not in self.swh_dir:
                 self.swh_dir[current_path] = from_disk.Directory()
-        self.swh_dir[path] = from_disk.Content.from_file(path=wtpath)
+        self.swh_dir[path] = from_disk.Content.from_file(
+            path=wtpath, max_content_length=self.max_content_size
+        )
 
     def checkout_file_with_rcsparse(
         self, k: ChangeSetKey, f: FileRevision, rcsfile: rcsparse.rcsfile

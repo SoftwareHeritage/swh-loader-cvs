@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2022  The Software Heritage developers
+# Copyright (C) 2016-2025  The Software Heritage developers
 # See the AUTHORS file at the top-level directory of this distribution
 # License: GNU Affero General Public License version 3, or any later version
 # See top-level LICENSE file for more information
@@ -1415,3 +1415,30 @@ def test_loader_cvs_empty_repository(swh_storage, datadir, tmp_path):
         type="cvs",
         snapshot=Snapshot(branches={}).id,
     )
+
+
+def test_loader_cvs_max_content_size(swh_storage, datadir, tmp_path):
+    """Contents whose size is greater than 1 byte should be skipped."""
+    archive_name = "runbaby"
+    archive_path = os.path.join(datadir, f"{archive_name}.tgz")
+    repo_url = prepare_repository_from_archive(archive_path, archive_name, tmp_path)
+
+    loader = CvsLoader(
+        swh_storage,
+        repo_url,
+        cvsroot_path=os.path.join(tmp_path, archive_name),
+        max_content_size=1,
+    )
+
+    assert loader.load() == {"status": "eventful"}
+
+    assert get_stats(loader.storage) == {
+        "content": 0,
+        "directory": 1,
+        "origin": 1,
+        "origin_visit": 1,
+        "release": 0,
+        "revision": 1,
+        "skipped_content": 5,
+        "snapshot": 1,
+    }
